@@ -1,6 +1,6 @@
 from flask import Flask
 from .config import Config
-from .extensions import db, jwt, cors
+from .extensions import cors, db, jwt
 from .routes import api_bp
 
 
@@ -17,6 +17,10 @@ def create_app(config_class=Config):
     cors.init_app(app)
 
     from . import models
+
+    # Ensure database tables exist in runtime database under application context
+    with app.app_context():
+        db.create_all()
 
     # Register blueprints
     app.register_blueprint(api_bp)

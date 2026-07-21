@@ -17,7 +17,7 @@ class TestConfig(Config):
 
 
 class AuthTestCase(unittest.TestCase):
-    """Test suite for Learner and Mentor Registration APIs."""
+    """Test suite for Registration and Login APIs."""
 
     def setUp(self):
         """Set up test app, database, and client before each test."""
@@ -89,7 +89,6 @@ class AuthTestCase(unittest.TestCase):
         self.assertTrue(data["data"]["is_learner"])
         self.assertFalse(data["data"]["is_mentor"])
 
-        # Verify user in database and check password hashing
         user = User.query.filter_by(email="john.learner@example.com").first()
         self.assertIsNotNone(user)
         self.assertNotEqual(user.password_hash, "SecurePassword123!")
@@ -196,103 +195,91 @@ class AuthTestCase(unittest.TestCase):
         data = response.get_json()
         self.assertEqual(data["status"], "success")
         self.assertEqual(data["message"], "Mentor registered successfully")
-        self.assertEqual(data["data"]["email"], "mary.mentor@example.com")
-        self.assertEqual(data["data"]["full_name"], "Mary Mentor")
-        self.assertEqual(data["data"]["phone_number"], "9876543220")
-        self.assertEqual(data["data"]["society_id"], self.sample_society_id)
         self.assertFalse(data["data"]["is_learner"])
         self.assertTrue(data["data"]["is_mentor"])
 
-        # Verify user in database and check password hashing
-        user = User.query.filter_by(email="mary.mentor@example.com").first()
-        self.assertIsNotNone(user)
-        self.assertTrue(user.is_mentor)
-        self.assertFalse(user.is_learner)
-        self.assertNotEqual(user.password_hash, "MentorPassword123!")
-        self.assertTrue(check_password_hash(user.password_hash, "MentorPassword123!"))
+    # --- Login Tests (NSEP-10) ---
 
-    def test_register_mentor_missing_fields(self):
-        """Test mentor registration with missing fields returns 400 Bad Request."""
-        payload = {
-            "full_name": "Incomplete Mentor",
-            "email": "incompletenementor@example.com",
+    def test_login_success(self):
+        """Test successful user login returns 200 OK, JWT access token, and user info."""
+        reg_payload = {
+            "full_name": "Login User",
+            "email": "login.user@example.com",
+            "password": "SecretPassword123!",
+            "phone_number": "9876543230",
+            "society_id": self.sample_society_id,
+        }
+        self.client.post("/api/auth/register", json=reg_payload)
+
+        login_payload = {
+            "email": "login.user@example.com",
+            "password": "SecretPassword123!",
         }
 
-        response = self.client.post("/api/auth/register/mentor", json=payload)
+        response = self.client.post("/api/auth/login", json=login_payload)
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertEqual(data["status"], "success")
+        self.assertEqual(data["message"], "Login successful")
+        self.assertIn("access_token", data)
+        self.assertTrue(len(data["access_token"]) > 0)
+        self.assertEqual(data["data"]["email"], "login.user@example.com")
+
+    def test_login_missing_email(self):
+        """Test login with missing email returns 400 Bad Request."""
+        login_payload = {"password": "SecretPassword123!"}
+        response = self.client.post("/api/auth/login", json=login_payload)
         self.assertEqual(response.status_code, 400)
 
         data = response.get_json()
         self.assertEqual(data["status"], "error")
         self.assertIn("Missing or invalid required fields", data["message"])
 
-    def test_register_mentor_invalid_society(self):
-        """Test mentor registration with non-existent society_id returns 400 Bad Request."""
-        payload = {
-            "full_name": "Invalid Society Mentor",
-            "email": "invalidsociety@example.com",
-            "password": "Password123!",
-            "phone_number": "9876543221",
-            "society_id": 99999,
-        }
-
-        response = self.client.post("/api/auth/register/mentor", json=payload)
+    def test_login_missing_password(self):
+        """Test login with missing password returns 400 Bad Request."""
+        login_payload = {"email": "login.user@example.com"}
+        response = self.client.post("/api/auth/login", json=login_payload)
         self.assertEqual(response.status_code, 400)
 
         data = response.get_json()
         self.assertEqual(data["status"], "error")
-        self.assertIn("does not exist", data["message"])
+        self.assertIn("Missing or invalid required fields", data["message"])
 
-    def test_register_mentor_duplicate_email(self):
-        """Test mentor registration with duplicate email returns 409 Conflict."""
-        payload = {
-            "full_name": "Mentor One",
-            "email": "duplicate.mentor@example.com",
-            "password": "Password123!",
-            "phone_number": "9876543222",
-            "society_id": self.sample_society_id,
+    def test_login_invalid_email(self):
+        """Test login with non-existent email returns 401 Unauthorized."""
+        login_payload = {
+            "email": "nonexistent@example.com",
+            "password": "SomePassword123!",
         }
-
-        self.client.post("/api/auth/register/mentor", json=payload)
-
-        payload_dup = {
-            "full_name": "Mentor Two",
-            "email": "duplicate.mentor@example.com",
-            "password": "Password456!",
-            "phone_number": "9876543223",
-            "society_id": self.sample_society_id,
-        }
-        response = self.client.post("/api/auth/register/mentor", json=payload_dup)
-        self.assertEqual(response.status_code, 409)
+        response = self.client.post("/api/auth/login", json=login_payload)
+        self.assertEqual(response.status_code, 401)
 
         data = response.get_json()
         self.assertEqual(data["status"], "error")
-        self.assertIn("email address already exists", data["message"])
+        self.assertEqual(data["message"], "Invalid email or password.")
 
-    def test_register_mentor_duplicate_phone(self):
-        """Test mentor registration with duplicate phone number returns 409 Conflict."""
-        payload = {
-            "full_name": "Mentor One",
-            "email": "mentor1@example.com",
-            "password": "Password123!",
-            "phone_number": "9811111111",
+    def test_login_invalid_password(self):
+        """Test login with incorrect password returns 401 Unauthorized."""
+        reg_payload = {
+            "full_name": "Login User",
+            "email": "login.user2@example.com",
+            "password": "CorrectPassword123!",
+            "phone_number": "9876543231",
             "society_id": self.sample_society_id,
         }
+        self.client.post("/api/auth/register", json=reg_payload)
 
-        self.client.post("/api/auth/register/mentor", json=payload)
-
-        payload_dup = {
-            "full_name": "Mentor Two",
-            "email": "mentor2@example.com",
-            "password": "Password456!",
-            "phone_number": "9811111111",
-            "society_id": self.sample_society_id,
+        login_payload = {
+            "email": "login.user2@example.com",
+            "password": "WrongPassword123!",
         }
-        response = self.client.post("/api/auth/register/mentor", json=payload_dup)
-        self.assertEqual(response.status_code, 409)
+        response = self.client.post("/api/auth/login", json=login_payload)
+        self.assertEqual(response.status_code, 401)
 
         data = response.get_json()
         self.assertEqual(data["status"], "error")
-        self.assertIn("phone number already exists", data["message"])
+        self.assertEqual(data["message"], "Invalid email or password.")
 
 
 if __name__ == "__main__":

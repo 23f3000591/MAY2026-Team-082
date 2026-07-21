@@ -1,8 +1,10 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from app.services.auth_service import (
+    AuthenticationError,
     DuplicateError,
     ValidationError,
+    login_user_service,
     register_learner_service,
     register_mentor_service,
 )
@@ -53,7 +55,10 @@ def register_learner():
     except DuplicateError as err:
         return jsonify({"status": "error", "message": err.message}), 409
 
-    except Exception:
+    except Exception as err:
+        current_app.logger.exception(
+            f"Unexpected error in register_learner: {str(err)}"
+        )
         return (
             jsonify({"status": "error", "message": "An unexpected error occurred."}),
             500,
@@ -102,7 +107,59 @@ def register_mentor():
     except DuplicateError as err:
         return jsonify({"status": "error", "message": err.message}), 409
 
-    except Exception:
+    except Exception as err:
+        current_app.logger.exception(f"Unexpected error in register_mentor: {str(err)}")
+        return (
+            jsonify({"status": "error", "message": "An unexpected error occurred."}),
+            500,
+        )
+
+
+@auth_bp.route("/login", methods=["POST"])
+def login():
+    """
+    POST /api/auth/login
+
+    Thin route handler to authenticate user credentials and issue JWT access token.
+    Delegates validation, password checking, and token generation to auth_service.
+    """
+    data = request.get_json(silent=True)
+
+    try:
+        user, access_token = login_user_service(data)
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "Login successful",
+                    "access_token": access_token,
+                    "data": {
+                        "user_id": user.user_id,
+                        "full_name": user.full_name,
+                        "email": user.email,
+                        "phone_number": user.phone_number,
+                        "society_id": user.society_id,
+                        "role": user.role,
+                        "is_learner": user.is_learner,
+                        "is_mentor": user.is_mentor,
+                        "is_verified": user.is_verified,
+                        "created_at": (
+                            user.created_at.isoformat() if user.created_at else None
+                        ),
+                    },
+                }
+            ),
+            200,
+        )
+
+    except ValidationError as err:
+        return jsonify({"status": "error", "message": err.message}), 400
+
+    except AuthenticationError as err:
+        return jsonify({"status": "error", "message": err.message}), 401
+
+    except Exception as err:
+        current_app.logger.exception(f"Unexpected error in login: {str(err)}")
         return (
             jsonify({"status": "error", "message": "An unexpected error occurred."}),
             500,
