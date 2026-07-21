@@ -17,7 +17,7 @@ class TestConfig(Config):
 
 
 class AuthTestCase(unittest.TestCase):
-    """Test suite for Registration and Login APIs."""
+    """Test suite for Registration, Login, and Logout APIs."""
 
     def setUp(self):
         """Set up test app, database, and client before each test."""
@@ -280,6 +280,64 @@ class AuthTestCase(unittest.TestCase):
         data = response.get_json()
         self.assertEqual(data["status"], "error")
         self.assertEqual(data["message"], "Invalid email or password.")
+
+    # --- Logout Tests (NSEP-11) ---
+
+    def test_logout_success(self):
+        """Test successful logout revokes JWT token and returns 200 OK."""
+        reg_payload = {
+            "full_name": "Logout User",
+            "email": "logout.user@example.com",
+            "password": "SecretPassword123!",
+            "phone_number": "9876543240",
+            "society_id": self.sample_society_id,
+        }
+        self.client.post("/api/auth/register", json=reg_payload)
+
+        login_res = self.client.post(
+            "/api/auth/login",
+            json={"email": "logout.user@example.com", "password": "SecretPassword123!"},
+        )
+        token = login_res.get_json()["access_token"]
+
+        headers = {"Authorization": f"Bearer {token}"}
+        response = self.client.post("/api/auth/logout", headers=headers)
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertEqual(data["status"], "success")
+        self.assertEqual(data["message"], "Successfully logged out")
+
+    def test_logout_token_revoked(self):
+        """Test reusing a revoked token after logout returns 401 Unauthorized."""
+        reg_payload = {
+            "full_name": "Revoke User",
+            "email": "revoke.user@example.com",
+            "password": "SecretPassword123!",
+            "phone_number": "9876543241",
+            "society_id": self.sample_society_id,
+        }
+        self.client.post("/api/auth/register", json=reg_payload)
+
+        login_res = self.client.post(
+            "/api/auth/login",
+            json={"email": "revoke.user@example.com", "password": "SecretPassword123!"},
+        )
+        token = login_res.get_json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # First logout call succeeds
+        logout_res = self.client.post("/api/auth/logout", headers=headers)
+        self.assertEqual(logout_res.status_code, 200)
+
+        # Second call using the revoked token fails with 401
+        response = self.client.post("/api/auth/logout", headers=headers)
+        self.assertEqual(response.status_code, 401)
+
+    def test_logout_missing_token(self):
+        """Test logout without Authorization header returns 401 Unauthorized."""
+        response = self.client.post("/api/auth/logout")
+        self.assertEqual(response.status_code, 401)
 
 
 if __name__ == "__main__":

@@ -5,6 +5,9 @@ from app.extensions import db
 from app.models.society import Society
 from app.models.user import User
 
+# In-memory blocklist set to store revoked JWT identifiers (JTIs)
+BLOCKLIST = set()
+
 
 class ValidationError(Exception):
     """Custom exception raised when input validation fails (HTTP 400)."""
@@ -31,6 +34,12 @@ class AuthenticationError(Exception):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
+
+
+def is_token_revoked(jwt_header: dict, jwt_payload: dict) -> bool:
+    """Callback function to check if a JWT token's JTI has been revoked."""
+    jti = jwt_payload.get("jti")
+    return jti in BLOCKLIST
 
 
 def register_user_service(
@@ -161,3 +170,17 @@ def login_user_service(data: dict) -> tuple[User, str]:
 
     access_token = create_access_token(identity=str(user.user_id))
     return user, access_token
+
+
+def logout_user_service(jwt_payload: dict) -> bool:
+    """
+    Service function to handle user logout.
+    Extracts the token JTI from jwt_payload and adds it to the blocklist.
+    """
+    if not jwt_payload or not isinstance(jwt_payload, dict):
+        raise ValidationError("Invalid JWT token payload.")
+
+    jti = jwt_payload.get("jti")
+    if jti:
+        BLOCKLIST.add(jti)
+    return True

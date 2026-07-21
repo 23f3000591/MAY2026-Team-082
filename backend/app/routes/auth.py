@@ -1,10 +1,12 @@
 from flask import Blueprint, current_app, jsonify, request
+from flask_jwt_extended import get_jwt, jwt_required
 
 from app.services.auth_service import (
     AuthenticationError,
     DuplicateError,
     ValidationError,
     login_user_service,
+    logout_user_service,
     register_learner_service,
     register_mentor_service,
 )
@@ -160,6 +162,35 @@ def login():
 
     except Exception as err:
         current_app.logger.exception(f"Unexpected error in login: {str(err)}")
+        return (
+            jsonify({"status": "error", "message": "An unexpected error occurred."}),
+            500,
+        )
+
+
+@auth_bp.route("/logout", methods=["POST"])
+@jwt_required()
+def logout():
+    """
+    POST /api/auth/logout
+
+    Thin route handler to revoke the current JWT access token.
+    Requires a valid Bearer token in the Authorization header.
+    """
+    try:
+        jwt_payload = get_jwt()
+        logout_user_service(jwt_payload)
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "Successfully logged out",
+                }
+            ),
+            200,
+        )
+    except Exception as err:
+        current_app.logger.exception(f"Unexpected error in logout: {str(err)}")
         return (
             jsonify({"status": "error", "message": "An unexpected error occurred."}),
             500,
