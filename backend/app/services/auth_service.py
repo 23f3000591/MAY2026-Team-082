@@ -23,9 +23,11 @@ class DuplicateError(Exception):
         self.status_code = status_code
 
 
-def register_learner_service(data: dict) -> User:
+def register_user_service(
+    data: dict, is_learner: bool = True, is_mentor: bool = False
+) -> User:
     """
-    Service function to handle learner registration logic.
+    Generalized service function to handle user registration logic.
 
     Steps:
     1. Validate required fields (full_name, email, password, phone_number, society_id).
@@ -33,7 +35,7 @@ def register_learner_service(data: dict) -> User:
     3. Ensure email is unique across all users.
     4. Ensure phone number is unique across all users.
     5. Hash password using werkzeug.security.generate_password_hash().
-    6. Instantiate User with is_learner=True and is_mentor=False.
+    6. Instantiate User with specified is_learner and is_mentor flags.
     7. Save the user into the database and return the created User model instance.
     """
     # Step 1: Validate payload format
@@ -93,7 +95,7 @@ def register_learner_service(data: dict) -> User:
     # Step 6: Hash the password securely using werkzeug.security.generate_password_hash
     hashed_password = generate_password_hash(password)
 
-    # Step 7: Create a new User instance with learner flags set
+    # Step 7: Create a new User instance with role flags set
     new_user = User(
         society_id=society_id_int,
         full_name=full_name,
@@ -101,13 +103,23 @@ def register_learner_service(data: dict) -> User:
         password_hash=hashed_password,
         phone_number=phone_number,
         role="user",
-        is_learner=True,
-        is_mentor=False,
+        is_learner=is_learner,
+        is_mentor=is_mentor,
         is_verified=False,
     )
 
-    # Step 8: Save and commit new learner to database
+    # Step 8: Save and commit new user to database
     db.session.add(new_user)
     db.session.commit()
 
     return new_user
+
+
+def register_learner_service(data: dict) -> User:
+    """Service function to handle learner registration logic (is_learner=True, is_mentor=False)."""
+    return register_user_service(data, is_learner=True, is_mentor=False)
+
+
+def register_mentor_service(data: dict) -> User:
+    """Service function to handle mentor registration logic (is_learner=False, is_mentor=True)."""
+    return register_user_service(data, is_learner=False, is_mentor=True)

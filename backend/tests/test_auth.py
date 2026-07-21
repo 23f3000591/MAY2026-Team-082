@@ -17,7 +17,7 @@ class TestConfig(Config):
 
 
 class AuthTestCase(unittest.TestCase):
-    """Test suite for Learner Registration API (POST /api/auth/register)."""
+    """Test suite for Learner and Mentor Registration APIs."""
 
     def setUp(self):
         """Set up test app, database, and client before each test."""
@@ -63,6 +63,8 @@ class AuthTestCase(unittest.TestCase):
         db.session.remove()
         db.drop_all()
         self.app_context.pop()
+
+    # --- Learner Registration Tests (NSEP-8) ---
 
     def test_register_learner_success(self):
         """Test successful learner registration returns 201 Created and hashes password."""
@@ -170,6 +172,122 @@ class AuthTestCase(unittest.TestCase):
             "society_id": self.sample_society_id,
         }
         response = self.client.post("/api/auth/register", json=payload_dup)
+        self.assertEqual(response.status_code, 409)
+
+        data = response.get_json()
+        self.assertEqual(data["status"], "error")
+        self.assertIn("phone number already exists", data["message"])
+
+    # --- Mentor Registration Tests (NSEP-9) ---
+
+    def test_register_mentor_success(self):
+        """Test successful mentor registration returns 201 Created and sets is_mentor=True."""
+        payload = {
+            "full_name": "Mary Mentor",
+            "email": "mary.mentor@example.com",
+            "password": "MentorPassword123!",
+            "phone_number": "9876543220",
+            "society_id": self.sample_society_id,
+        }
+
+        response = self.client.post("/api/auth/register/mentor", json=payload)
+        self.assertEqual(response.status_code, 201)
+
+        data = response.get_json()
+        self.assertEqual(data["status"], "success")
+        self.assertEqual(data["message"], "Mentor registered successfully")
+        self.assertEqual(data["data"]["email"], "mary.mentor@example.com")
+        self.assertEqual(data["data"]["full_name"], "Mary Mentor")
+        self.assertEqual(data["data"]["phone_number"], "9876543220")
+        self.assertEqual(data["data"]["society_id"], self.sample_society_id)
+        self.assertFalse(data["data"]["is_learner"])
+        self.assertTrue(data["data"]["is_mentor"])
+
+        # Verify user in database and check password hashing
+        user = User.query.filter_by(email="mary.mentor@example.com").first()
+        self.assertIsNotNone(user)
+        self.assertTrue(user.is_mentor)
+        self.assertFalse(user.is_learner)
+        self.assertNotEqual(user.password_hash, "MentorPassword123!")
+        self.assertTrue(check_password_hash(user.password_hash, "MentorPassword123!"))
+
+    def test_register_mentor_missing_fields(self):
+        """Test mentor registration with missing fields returns 400 Bad Request."""
+        payload = {
+            "full_name": "Incomplete Mentor",
+            "email": "incompletenementor@example.com",
+        }
+
+        response = self.client.post("/api/auth/register/mentor", json=payload)
+        self.assertEqual(response.status_code, 400)
+
+        data = response.get_json()
+        self.assertEqual(data["status"], "error")
+        self.assertIn("Missing or invalid required fields", data["message"])
+
+    def test_register_mentor_invalid_society(self):
+        """Test mentor registration with non-existent society_id returns 400 Bad Request."""
+        payload = {
+            "full_name": "Invalid Society Mentor",
+            "email": "invalidsociety@example.com",
+            "password": "Password123!",
+            "phone_number": "9876543221",
+            "society_id": 99999,
+        }
+
+        response = self.client.post("/api/auth/register/mentor", json=payload)
+        self.assertEqual(response.status_code, 400)
+
+        data = response.get_json()
+        self.assertEqual(data["status"], "error")
+        self.assertIn("does not exist", data["message"])
+
+    def test_register_mentor_duplicate_email(self):
+        """Test mentor registration with duplicate email returns 409 Conflict."""
+        payload = {
+            "full_name": "Mentor One",
+            "email": "duplicate.mentor@example.com",
+            "password": "Password123!",
+            "phone_number": "9876543222",
+            "society_id": self.sample_society_id,
+        }
+
+        self.client.post("/api/auth/register/mentor", json=payload)
+
+        payload_dup = {
+            "full_name": "Mentor Two",
+            "email": "duplicate.mentor@example.com",
+            "password": "Password456!",
+            "phone_number": "9876543223",
+            "society_id": self.sample_society_id,
+        }
+        response = self.client.post("/api/auth/register/mentor", json=payload_dup)
+        self.assertEqual(response.status_code, 409)
+
+        data = response.get_json()
+        self.assertEqual(data["status"], "error")
+        self.assertIn("email address already exists", data["message"])
+
+    def test_register_mentor_duplicate_phone(self):
+        """Test mentor registration with duplicate phone number returns 409 Conflict."""
+        payload = {
+            "full_name": "Mentor One",
+            "email": "mentor1@example.com",
+            "password": "Password123!",
+            "phone_number": "9811111111",
+            "society_id": self.sample_society_id,
+        }
+
+        self.client.post("/api/auth/register/mentor", json=payload)
+
+        payload_dup = {
+            "full_name": "Mentor Two",
+            "email": "mentor2@example.com",
+            "password": "Password456!",
+            "phone_number": "9811111111",
+            "society_id": self.sample_society_id,
+        }
+        response = self.client.post("/api/auth/register/mentor", json=payload_dup)
         self.assertEqual(response.status_code, 409)
 
         data = response.get_json()
