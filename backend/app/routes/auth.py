@@ -9,6 +9,8 @@ from app.services.auth_service import (
     logout_user_service,
     register_learner_service,
     register_mentor_service,
+    request_password_reset_service,
+    reset_password_service,
 )
 
 # Blueprint for authentication routes
@@ -191,6 +193,63 @@ def logout():
         )
     except Exception as err:
         current_app.logger.exception(f"Unexpected error in logout: {str(err)}")
+        return (
+            jsonify({"status": "error", "message": "An unexpected error occurred."}),
+            500,
+        )
+
+
+@auth_bp.route("/forgot-password", methods=["POST"])
+def forgot_password():
+    """
+    POST /api/auth/forgot-password
+
+    Thin route handler to request a password reset link.
+    Returns generic 200 response to prevent email enumeration.
+    """
+    data = request.get_json(silent=True)
+
+    try:
+        result = request_password_reset_service(data)
+        return jsonify(result), 200
+
+    except ValidationError as err:
+        return jsonify({"status": "error", "message": err.message}), 400
+
+    except Exception as err:
+        current_app.logger.exception(f"Unexpected error in forgot_password: {str(err)}")
+        return (
+            jsonify({"status": "error", "message": "An unexpected error occurred."}),
+            500,
+        )
+
+
+@auth_bp.route("/reset-password", methods=["POST"])
+def reset_password():
+    """
+    POST /api/auth/reset-password
+
+    Thin route handler to reset user password using a valid reset token.
+    """
+    data = request.get_json(silent=True)
+
+    try:
+        reset_password_service(data)
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "Password reset successfully. You can now log in with your new password.",
+                }
+            ),
+            200,
+        )
+
+    except ValidationError as err:
+        return jsonify({"status": "error", "message": err.message}), 400
+
+    except Exception as err:
+        current_app.logger.exception(f"Unexpected error in reset_password: {str(err)}")
         return (
             jsonify({"status": "error", "message": "An unexpected error occurred."}),
             500,

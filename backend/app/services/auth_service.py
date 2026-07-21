@@ -1,9 +1,12 @@
-from flask_jwt_extended import create_access_token
+from datetime import timedelta
+
+from flask_jwt_extended import create_access_token, decode_token
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.extensions import db
 from app.models.society import Society
 from app.models.user import User
+from app.utils.email_service import send_password_reset_email
 
 # In-memory blocklist set to store revoked JWT identifiers (JTIs)
 BLOCKLIST = set()
@@ -57,7 +60,7 @@ def register_user_service(
     6. Instantiate User with specified is_learner and is_mentor flags.
     7. Save the user into the database and return the created User model instance.
     """
-    if not data or not isinstance(data, dict):
+    if data is None or not isinstance(data, dict):
         raise ValidationError("Request body must be a valid JSON object.")
 
     full_name = data.get("full_name")
@@ -145,7 +148,7 @@ def login_user_service(data: dict) -> tuple[User, str]:
     4. Generate JWT access token using flask_jwt_extended.create_access_token().
     5. Return tuple of (user, access_token).
     """
-    if not data or not isinstance(data, dict):
+    if data is None or not isinstance(data, dict):
         raise ValidationError("Request body must be a valid JSON object.")
 
     email = data.get("email")
@@ -177,10 +180,88 @@ def logout_user_service(jwt_payload: dict) -> bool:
     Service function to handle user logout.
     Extracts the token JTI from jwt_payload and adds it to the blocklist.
     """
-    if not jwt_payload or not isinstance(jwt_payload, dict):
+    if jwt_payload is None or not isinstance(jwt_payload, dict):
         raise ValidationError("Invalid JWT token payload.")
 
     jti = jwt_payload.get("jti")
     if jti:
         BLOCKLIST.add(jti)
     return True
+
+
+def request_password_reset_service(data: dict) -> dict:
+    """
+    Handles request for password reset link.
+    Returns a consistent generic response to prevent email enumeration attacks.
+    """
+    if data is None or not isinstance(data, dict):
+        raise ValidationError("Request body must be a valid JSON object.")
+
+    email = data.get("email")
+    if not email or not str(email).strip():
+        raise ValidationError("Missing or invalid required fields: email")
+
+    email = str(email).strip().lower()
+
+    user = User.query.filter_by(email=email).first()
+    if user:
+        reset_token = create_access_token(
+            identity=str(user.user_id),
+            expires_delta=timedelta(minutes=15),
+            additional_claims={"type": "reset_password"},
+        )
+        send_password_reset_email(email, reset_token)
+
+    return {
+        "status": "success",
+        "message": "If an account with that email exists, a password reset link has been sent.",
+    }
+
+
+def reset_password_service(data: dict) -> User:
+    """
+    Handles resetting password using a valid, non-expired, single-use reset token.
+    """
+    if data is None or not isinstance(data, dict):
+        raise ValidationError("Request body must be a valid JSON object.")
+
+    token = data.get("token")
+    new_password = data.get("new_password")
+
+    missing_fields = []
+    if not token or not str(token).strip():
+        missing_fields.append("token")
+    if not new_password or not str(new_password).strip():
+        missing_fields.append("new_password")
+
+    if missing_fields:
+        raise ValidationError(
+            f"Missing or invalid required fields: {', '.join(missing_fields)}"
+        )
+
+    token = str(token).strip()
+
+    try:
+        decoded = decode_token(token)
+    except Exception:
+        raise ValidationError("Invalid or expired password reset token.")
+
+    if decoded.get("type") != "reset_password":
+        raise ValidationError("Invalid password reset token type.")
+
+    jti = decoded.get("jti")
+    if not jti or jti in BLOCKLIST:
+        raise ValidationError(
+            "Password reset token has already been used or revoked."
+        )
+
+    user_id = decoded.get("sub")
+    user = db.session.get(User, int(user_id)) if user_id else None
+    if not user:
+        raise ValidationError("User associated with this reset token does not exist.")
+
+    user.password_hash = generate_password_hash(new_password)
+    BLOCKLIST.add(jti)
+
+    db.session.commit()
+    return user

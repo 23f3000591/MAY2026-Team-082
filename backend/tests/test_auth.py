@@ -1,5 +1,7 @@
 import unittest
+from datetime import timedelta
 from werkzeug.security import check_password_hash
+from flask_jwt_extended import create_access_token
 
 from app import create_app
 from app.config import Config
@@ -17,7 +19,7 @@ class TestConfig(Config):
 
 
 class AuthTestCase(unittest.TestCase):
-    """Test suite for Registration, Login, and Logout APIs."""
+    """Test suite for Registration, Login, Logout, and Password Reset APIs."""
 
     def setUp(self):
         """Set up test app, database, and client before each test."""
@@ -338,6 +340,136 @@ class AuthTestCase(unittest.TestCase):
         """Test logout without Authorization header returns 401 Unauthorized."""
         response = self.client.post("/api/auth/logout")
         self.assertEqual(response.status_code, 401)
+
+    # --- Forgot Password & Reset Password Tests (NSEP-12) ---
+
+    def test_forgot_password_existing_email(self):
+        """Test requesting password reset for registered email returns 200 OK."""
+        reg_payload = {
+            "full_name": "Forgot User",
+            "email": "forgot.user@example.com",
+            "password": "Password123!",
+            "phone_number": "9876543250",
+            "society_id": self.sample_society_id,
+        }
+        self.client.post("/api/auth/register", json=reg_payload)
+
+        response = self.client.post(
+            "/api/auth/forgot-password", json={"email": "forgot.user@example.com"}
+        )
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertEqual(data["status"], "success")
+        self.assertIn("password reset link has been sent", data["message"])
+
+    def test_forgot_password_nonexistent_email(self):
+        """Test requesting password reset for unregistered email returns identical 200 OK (anti-enumeration)."""
+        response = self.client.post(
+            "/api/auth/forgot-password", json={"email": "nonexistent.email@example.com"}
+        )
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertEqual(data["status"], "success")
+        self.assertIn("password reset link has been sent", data["message"])
+
+    def test_forgot_password_missing_email(self):
+        """Test requesting password reset without email returns 400 Bad Request."""
+        response = self.client.post("/api/auth/forgot-password", json={})
+        self.assertEqual(response.status_code, 400)
+
+        data = response.get_json()
+        self.assertEqual(data["status"], "error")
+        self.assertIn("Missing or invalid required fields", data["message"])
+
+    def test_reset_password_success(self):
+        """Test resetting password with a valid token updates user password and allows login."""
+        reg_payload = {
+            "full_name": "Reset User",
+            "email": "reset.user@example.com",
+            "password": "OldPassword123!",
+            "phone_number": "9876543251",
+            "society_id": self.sample_society_id,
+        }
+        self.client.post("/api/auth/register", json=reg_payload)
+
+        user = User.query.filter_by(email="reset.user@example.com").first()
+
+        reset_token = create_access_token(
+            identity=str(user.user_id),
+            expires_delta=timedelta(minutes=15),
+            additional_claims={"type": "reset_password"},
+        )
+
+        reset_payload = {
+            "token": reset_token,
+            "new_password": "NewSecurePassword456!",
+        }
+
+        response = self.client.post("/api/auth/reset-password", json=reset_payload)
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertEqual(data["status"], "success")
+        self.assertIn("Password reset successfully", data["message"])
+
+        # Verify user can log in with new password
+        login_res = self.client.post(
+            "/api/auth/login",
+            json={
+                "email": "reset.user@example.com",
+                "password": "NewSecurePassword456!",
+            },
+        )
+        self.assertEqual(login_res.status_code, 200)
+
+    def test_reset_password_invalid_token(self):
+        """Test resetting password with an invalid token returns 400 Bad Request."""
+        reset_payload = {
+            "token": "invalid.jwt.token",
+            "new_password": "NewPassword123!",
+        }
+        response = self.client.post("/api/auth/reset-password", json=reset_payload)
+        self.assertEqual(response.status_code, 400)
+
+        data = response.get_json()
+        self.assertEqual(data["status"], "error")
+        self.assertIn("Invalid or expired password reset token", data["message"])
+
+    def test_reset_password_token_replay(self):
+        """Test attempting to reuse a password reset token returns 400 Bad Request."""
+        reg_payload = {
+            "full_name": "Replay User",
+            "email": "replay.user@example.com",
+            "password": "OldPassword123!",
+            "phone_number": "9876543252",
+            "society_id": self.sample_society_id,
+        }
+        self.client.post("/api/auth/register", json=reg_payload)
+        user = User.query.filter_by(email="replay.user@example.com").first()
+
+        reset_token = create_access_token(
+            identity=str(user.user_id),
+            expires_delta=timedelta(minutes=15),
+            additional_claims={"type": "reset_password"},
+        )
+
+        reset_payload = {
+            "token": reset_token,
+            "new_password": "NewSecurePassword456!",
+        }
+
+        # First reset succeeds
+        self.client.post("/api/auth/reset-password", json=reset_payload)
+
+        # Second reset with same token fails
+        response = self.client.post("/api/auth/reset-password", json=reset_payload)
+        self.assertEqual(response.status_code, 400)
+
+        data = response.get_json()
+        self.assertEqual(data["status"], "error")
+        self.assertIn("already been used or revoked", data["message"])
 
 
 if __name__ == "__main__":
