@@ -3,6 +3,7 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from app.extensions import db
 from app.models.skill import Skill
+from app.models.society import Society
 from app.models.user import User
 from app.models.user_skill import UserSkill
 
@@ -93,3 +94,80 @@ class MentorSearchService:
             )
 
         return response_dto
+
+    @staticmethod
+    def search_mentors_by_location(location_query: str) -> list:
+        """
+        Search mentors by location (city, society name, state, address - case insensitive, partial match).
+
+        :param location_query: Location search query string.
+        :return: List of dicts representing matching mentors.
+        :raises ValidationError: If location_query is missing or empty.
+        """
+        if location_query is None or not str(location_query).strip():
+            raise ValidationError("location query parameter is required", status_code=400)
+
+        cleaned_location = str(location_query).strip()
+
+        # Query users who are mentors and belong to a society matching location query
+        mentors = (
+            db.session.query(User)
+            .options(
+                joinedload(User.society),
+                selectinload(User.user_skills).joinedload(UserSkill.skill),
+                selectinload(User.reviews_received),
+            )
+            .join(Society, User.society_id == Society.society_id)
+            .filter(
+                or_(
+                    func.lower(User.role) == "mentor",
+                    User.is_mentor.is_(True),
+                ),
+                or_(
+                    Society.city.ilike(f"%{cleaned_location}%"),
+                    Society.society_name.ilike(f"%{cleaned_location}%"),
+                    Society.state.ilike(f"%{cleaned_location}%"),
+                    Society.address.ilike(f"%{cleaned_location}%"),
+                ),
+            )
+            .distinct()
+            .all()
+        )
+
+        response_dto = []
+        for mentor in mentors:
+            skills_list = [
+                us.skill.skill_name
+                for us in mentor.user_skills
+                if us.skill and us.skill.skill_name
+            ]
+
+            if mentor.reviews_received:
+                ratings = [
+                    r.rating for r in mentor.reviews_received if r.rating is not None
+                ]
+                avg_rating = (
+                    round(sum(ratings) / len(ratings), 1) if ratings else 0.0
+                )
+            else:
+                avg_rating = 0.0
+
+            location = (
+                mentor.society.city
+                if mentor.society and mentor.society.city
+                else ""
+            )
+
+            response_dto.append(
+                {
+                    "id": mentor.user_id,
+                    "name": mentor.full_name,
+                    "location": location,
+                    "skills": skills_list,
+                    "rating": avg_rating,
+                    "profile_picture": mentor.profile_image or "",
+                }
+            )
+
+        return response_dto
+
