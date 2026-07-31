@@ -176,15 +176,19 @@ class MentorSearchService:
         skill: str = None,
         location: str = None,
         minimum_rating_raw: str = None,
+        sort: str = None,
+        order: str = None,
     ) -> list:
         """
-        Filter mentors dynamically by optional criteria: skill, location, minimum_rating.
+        Filter and sort mentors dynamically by optional criteria: skill, location, minimum_rating, sort, order.
 
         :param skill: Optional skill query string (case insensitive, partial match).
         :param location: Optional location query string (case insensitive, partial match).
         :param minimum_rating_raw: Optional minimum rating value string.
-        :return: List of dicts representing mentors matching all supplied criteria.
-        :raises ValidationError: If minimum_rating_raw is invalid numeric string.
+        :param sort: Optional sort field ('rating' or 'name').
+        :param order: Optional sort order ('asc' or 'desc').
+        :return: List of dicts representing mentors matching all supplied criteria in requested order.
+        :raises ValidationError: If minimum_rating_raw, sort, or order parameters are invalid.
         """
         min_rating = None
         if minimum_rating_raw is not None and str(minimum_rating_raw).strip() != "":
@@ -192,6 +196,20 @@ class MentorSearchService:
                 min_rating = float(minimum_rating_raw)
             except (ValueError, TypeError):
                 raise ValidationError("minimum_rating must be a valid number", status_code=400)
+
+        # Validate sort field if provided
+        sort_field = None
+        if sort is not None and str(sort).strip() != "":
+            sort_field = str(sort).strip().lower()
+            if sort_field not in ["rating", "name"]:
+                raise ValidationError("Invalid sort field", status_code=400)
+
+        # Validate order field if provided
+        sort_order = "asc"
+        if order is not None and str(order).strip() != "":
+            sort_order = str(order).strip().lower()
+            if sort_order not in ["asc", "desc"]:
+                raise ValidationError("Invalid sort order", status_code=400)
 
         query = (
             db.session.query(User)
@@ -267,5 +285,14 @@ class MentorSearchService:
                 }
             )
 
+        # Apply sorting if specified
+        if sort_field == "rating":
+            reverse_flag = (sort_order == "desc")
+            response_dto.sort(key=lambda x: x["rating"], reverse=reverse_flag)
+        elif sort_field == "name":
+            reverse_flag = (sort_order == "desc")
+            response_dto.sort(key=lambda x: x["name"].lower(), reverse=reverse_flag)
+
         return response_dto
+
 
