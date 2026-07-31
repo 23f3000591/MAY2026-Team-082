@@ -1,6 +1,10 @@
 from flask import Blueprint, jsonify, request
 
-from app.services.mentor_service import MentorSearchService, ValidationError
+from app.services.mentor_service import (
+    MentorSearchService,
+    NotFoundError,
+    ValidationError,
+)
 
 # Blueprint for mentor routes
 mentor_bp = Blueprint(
@@ -41,6 +45,7 @@ def search_mentors_by_location():
     except ValidationError as err:
         return jsonify({"error": err.message}), 400
 
+
 @mentor_bp.route("/filter", methods=["GET"])
 def filter_mentors():
     """
@@ -65,5 +70,22 @@ def filter_mentors():
         return jsonify(results), 200
     except ValidationError as err:
         return jsonify({"error": err.message}), 400
+
+
+@mentor_bp.route("/<mentor_id_raw>", methods=["GET"])
+def get_mentor_details(mentor_id_raw):
+    """
+    GET /api/mentors/<mentor_id>
+
+    Retrieves complete details for a specific mentor.
+    """
+    try:
+        details = MentorSearchService.get_mentor_details(mentor_id_raw)
+        return jsonify(details), 200
+    except ValidationError as err:
+        return jsonify({"error": err.message}), 400
+    except NotFoundError as err:
+        return jsonify({"error": err.message}), 404
+
 
 

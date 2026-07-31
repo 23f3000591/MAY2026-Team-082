@@ -17,8 +17,98 @@ class ValidationError(Exception):
         self.status_code = status_code
 
 
+class NotFoundError(Exception):
+    """Exception raised when requested resource is not found (HTTP 404)."""
+
+    def __init__(self, message: str, status_code: int = 404):
+        super().__init__(message)
+        self.message = message
+        self.status_code = status_code
+
+
 class MentorSearchService:
     """Service class for mentor search operations."""
+
+    @staticmethod
+    def get_mentor_details(mentor_id_raw) -> dict:
+        """
+        Retrieve complete details for a mentor by ID.
+
+        :param mentor_id_raw: Raw mentor ID parameter from route.
+        :return: Dict containing complete mentor details DTO.
+        :raises ValidationError: If mentor_id_raw is not a valid positive integer.
+        :raises NotFoundError: If mentor with mentor_id is not found or is not a mentor.
+        """
+        try:
+            mentor_id = int(mentor_id_raw)
+            if mentor_id <= 0:
+                raise ValueError()
+        except (ValueError, TypeError):
+            raise ValidationError("Invalid mentor ID", status_code=400)
+
+        mentor = (
+            db.session.query(User)
+            .options(
+                joinedload(User.society),
+                selectinload(User.user_skills).joinedload(UserSkill.skill),
+                selectinload(User.reviews_received),
+                selectinload(User.availabilities),
+            )
+            .filter(
+                User.user_id == mentor_id,
+                or_(
+                    func.lower(User.role) == "mentor",
+                    User.is_mentor.is_(True),
+                ),
+            )
+            .first()
+        )
+
+        if not mentor:
+            raise NotFoundError("Mentor not found", status_code=404)
+
+        skills_list = [
+            us.skill.skill_name
+            for us in mentor.user_skills
+            if us.skill and us.skill.skill_name
+        ]
+
+        if mentor.reviews_received:
+            ratings = [
+                r.rating for r in mentor.reviews_received if r.rating is not None
+            ]
+            avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else 0.0
+            review_count = len(mentor.reviews_received)
+        else:
+            avg_rating = 0.0
+            review_count = 0
+
+        availability_list = []
+        for a in mentor.availabilities:
+            if a.start_time:
+                formatted_time = a.start_time.strftime("%I %p").lstrip("0")
+                availability_list.append(f"{a.day_of_week} {formatted_time}")
+            else:
+                availability_list.append(str(a.day_of_week))
+
+        location = (
+            mentor.society.city
+            if mentor.society and mentor.society.city
+            else ""
+        )
+
+        return {
+            "id": mentor.user_id,
+            "name": mentor.full_name,
+            "bio": mentor.bio or "",
+            "location": location,
+            "skills": skills_list,
+            "rating": avg_rating,
+            "review_count": review_count,
+            "availability": availability_list,
+            "profile_picture": mentor.profile_image or "",
+        }
+
 
     @staticmethod
     def search_mentors_by_skill(skill_query: str) -> list:
