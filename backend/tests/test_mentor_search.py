@@ -230,6 +230,134 @@ class MentorSearchTestCase(unittest.TestCase):
         # Learner has Python skill, but is_mentor=False and role='user', so should NOT be returned
         self.assertNotIn(self.learner.user_id, mentor_ids)
 
+    # --- NSEP-23: Search Mentors by Location Tests ---
+
+    def test_search_mentors_by_location_valid(self):
+        """Test valid location search returns HTTP 200 and matching mentors with expected JSON schema."""
+        response = self.client.get("/api/mentors/search/location?location=Chennai")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertIsInstance(data, list)
+        self.assertGreaterEqual(len(data), 1)
+
+        mentor_data = next((m for m in data if m["id"] == self.mentor1.user_id), None)
+        self.assertIsNotNone(mentor_data)
+        self.assertEqual(mentor_data["name"], "John Doe")
+        self.assertEqual(mentor_data["location"], "Chennai")
+        self.assertIn("Python", mentor_data["skills"])
+        self.assertEqual(mentor_data["rating"], 4.5)
+        self.assertEqual(mentor_data["profile_picture"], "http://example.com/john.jpg")
+
+    def test_search_mentors_by_location_partial(self):
+        """Test partial location search ('chen' matching 'Chennai')."""
+        response = self.client.get("/api/mentors/search/location?location=chen")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        mentor_ids = [m["id"] for m in data]
+        self.assertIn(self.mentor1.user_id, mentor_ids)
+        self.assertIn(self.mentor2.user_id, mentor_ids)
+
+    def test_search_mentors_by_location_case_insensitive(self):
+        """Test case-insensitive location search ('CHENNAI', 'chennai', 'ChEnNaI')."""
+        for query in ["CHENNAI", "chennai", "ChEnNaI"]:
+            response = self.client.get(f"/api/mentors/search/location?location={query}")
+            self.assertEqual(response.status_code, 200)
+
+            data = response.get_json()
+            mentor_ids = [m["id"] for m in data]
+            self.assertIn(self.mentor1.user_id, mentor_ids)
+
+    def test_search_mentors_by_location_no_results(self):
+        """Test searching for non-existent location returns HTTP 200 and empty list []."""
+        response = self.client.get("/api/mentors/search/location?location=Mumbai")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), [])
+
+    def test_search_mentors_by_location_missing_parameter(self):
+        """Test missing location query parameter returns HTTP 400 with error message."""
+        response = self.client.get("/api/mentors/search/location")
+        self.assertEqual(response.status_code, 400)
+
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"], "location query parameter is required")
+
+    def test_search_mentors_by_location_empty_parameter(self):
+        """Test empty location query parameter returns HTTP 400 with error message."""
+        response = self.client.get("/api/mentors/search/location?location=")
+        self.assertEqual(response.status_code, 400)
+
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"], "location query parameter is required")
+
+    # --- NSEP-24: Filter Mentors Tests ---
+
+    def test_filter_mentors_by_skill(self):
+        """Test filtering mentors by skill parameter."""
+        response = self.client.get("/api/mentors/filter?skill=Python")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertIsInstance(data, list)
+        mentor_ids = [m["id"] for m in data]
+        self.assertIn(self.mentor1.user_id, mentor_ids)
+
+    def test_filter_mentors_by_location(self):
+        """Test filtering mentors by location parameter."""
+        response = self.client.get("/api/mentors/filter?location=Chennai")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertIsInstance(data, list)
+        mentor_ids = [m["id"] for m in data]
+        self.assertIn(self.mentor1.user_id, mentor_ids)
+        self.assertIn(self.mentor2.user_id, mentor_ids)
+
+    def test_filter_mentors_by_minimum_rating(self):
+        """Test filtering mentors by minimum rating parameter (>= provided rating)."""
+        response = self.client.get("/api/mentors/filter?minimum_rating=4")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        mentor_ids = [m["id"] for m in data]
+        self.assertIn(self.mentor1.user_id, mentor_ids)
+
+        # High minimum rating should exclude mentor2 (rating=0.0)
+        response_high = self.client.get("/api/mentors/filter?minimum_rating=4.5")
+        data_high = response_high.get_json()
+        high_mentor_ids = [m["id"] for m in data_high]
+        self.assertIn(self.mentor1.user_id, high_mentor_ids)
+        self.assertNotIn(self.mentor2.user_id, high_mentor_ids)
+
+    def test_filter_mentors_multiple_filters(self):
+        """Test filtering mentors with multiple criteria simultaneously (AND logic)."""
+        response = self.client.get("/api/mentors/filter?skill=Python&location=Chennai&minimum_rating=4.5")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["id"], self.mentor1.user_id)
+        self.assertEqual(data[0]["name"], "John Doe")
+
+    def test_filter_mentors_no_results(self):
+        """Test filter combination that yields no matching mentors returns HTTP 200 []."""
+        response = self.client.get("/api/mentors/filter?skill=Java&location=Chennai")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), [])
+
+    def test_filter_mentors_invalid_minimum_rating(self):
+        """Test non-numeric minimum_rating returns HTTP 400 error."""
+        response = self.client.get("/api/mentors/filter?minimum_rating=invalid")
+        self.assertEqual(response.status_code, 400)
+
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"], "minimum_rating must be a valid number")
+
 
 if __name__ == "__main__":
     unittest.main()
+

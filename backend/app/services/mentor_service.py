@@ -3,6 +3,7 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from app.extensions import db
 from app.models.skill import Skill
+from app.models.society import Society
 from app.models.user import User
 from app.models.user_skill import UserSkill
 
@@ -93,3 +94,178 @@ class MentorSearchService:
             )
 
         return response_dto
+
+    @staticmethod
+    def search_mentors_by_location(location_query: str) -> list:
+        """
+        Search mentors by location (city, society name, state, address - case insensitive, partial match).
+
+        :param location_query: Location search query string.
+        :return: List of dicts representing matching mentors.
+        :raises ValidationError: If location_query is missing or empty.
+        """
+        if location_query is None or not str(location_query).strip():
+            raise ValidationError("location query parameter is required", status_code=400)
+
+        cleaned_location = str(location_query).strip()
+
+        # Query users who are mentors and belong to a society matching location query
+        mentors = (
+            db.session.query(User)
+            .options(
+                joinedload(User.society),
+                selectinload(User.user_skills).joinedload(UserSkill.skill),
+                selectinload(User.reviews_received),
+            )
+            .join(Society, User.society_id == Society.society_id)
+            .filter(
+                or_(
+                    func.lower(User.role) == "mentor",
+                    User.is_mentor.is_(True),
+                ),
+                or_(
+                    Society.city.ilike(f"%{cleaned_location}%"),
+                    Society.society_name.ilike(f"%{cleaned_location}%"),
+                    Society.state.ilike(f"%{cleaned_location}%"),
+                    Society.address.ilike(f"%{cleaned_location}%"),
+                ),
+            )
+            .distinct()
+            .all()
+        )
+
+        response_dto = []
+        for mentor in mentors:
+            skills_list = [
+                us.skill.skill_name
+                for us in mentor.user_skills
+                if us.skill and us.skill.skill_name
+            ]
+
+            if mentor.reviews_received:
+                ratings = [
+                    r.rating for r in mentor.reviews_received if r.rating is not None
+                ]
+                avg_rating = (
+                    round(sum(ratings) / len(ratings), 1) if ratings else 0.0
+                )
+            else:
+                avg_rating = 0.0
+
+            location = (
+                mentor.society.city
+                if mentor.society and mentor.society.city
+                else ""
+            )
+
+            response_dto.append(
+                {
+                    "id": mentor.user_id,
+                    "name": mentor.full_name,
+                    "location": location,
+                    "skills": skills_list,
+                    "rating": avg_rating,
+                    "profile_picture": mentor.profile_image or "",
+                }
+            )
+
+        return response_dto
+
+    @staticmethod
+    def filter_mentors(
+        skill: str = None,
+        location: str = None,
+        minimum_rating_raw: str = None,
+    ) -> list:
+        """
+        Filter mentors dynamically by optional criteria: skill, location, minimum_rating.
+
+        :param skill: Optional skill query string (case insensitive, partial match).
+        :param location: Optional location query string (case insensitive, partial match).
+        :param minimum_rating_raw: Optional minimum rating value string.
+        :return: List of dicts representing mentors matching all supplied criteria.
+        :raises ValidationError: If minimum_rating_raw is invalid numeric string.
+        """
+        min_rating = None
+        if minimum_rating_raw is not None and str(minimum_rating_raw).strip() != "":
+            try:
+                min_rating = float(minimum_rating_raw)
+            except (ValueError, TypeError):
+                raise ValidationError("minimum_rating must be a valid number", status_code=400)
+
+        query = (
+            db.session.query(User)
+            .options(
+                joinedload(User.society),
+                selectinload(User.user_skills).joinedload(UserSkill.skill),
+                selectinload(User.reviews_received),
+            )
+            .filter(
+                or_(
+                    func.lower(User.role) == "mentor",
+                    User.is_mentor.is_(True),
+                )
+            )
+        )
+
+        if skill is not None and str(skill).strip() != "":
+            cleaned_skill = str(skill).strip()
+            query = (
+                query.join(UserSkill, User.user_id == UserSkill.user_id)
+                .join(Skill, UserSkill.skill_id == Skill.skill_id)
+                .filter(Skill.skill_name.ilike(f"%{cleaned_skill}%"))
+            )
+
+        if location is not None and str(location).strip() != "":
+            cleaned_location = str(location).strip()
+            query = query.join(Society, User.society_id == Society.society_id).filter(
+                or_(
+                    Society.city.ilike(f"%{cleaned_location}%"),
+                    Society.society_name.ilike(f"%{cleaned_location}%"),
+                    Society.state.ilike(f"%{cleaned_location}%"),
+                    Society.address.ilike(f"%{cleaned_location}%"),
+                )
+            )
+
+        mentors = query.distinct().all()
+
+        response_dto = []
+        for mentor in mentors:
+            skills_list = [
+                us.skill.skill_name
+                for us in mentor.user_skills
+                if us.skill and us.skill.skill_name
+            ]
+
+            if mentor.reviews_received:
+                ratings = [
+                    r.rating for r in mentor.reviews_received if r.rating is not None
+                ]
+                avg_rating = (
+                    round(sum(ratings) / len(ratings), 1) if ratings else 0.0
+                )
+            else:
+                avg_rating = 0.0
+
+            if min_rating is not None and avg_rating < min_rating:
+                continue
+
+            loc = (
+                mentor.society.city
+                if mentor.society and mentor.society.city
+                else ""
+            )
+
+            response_dto.append(
+                {
+                    "id": mentor.user_id,
+                    "name": mentor.full_name,
+                    "location": loc,
+                    "skills": skills_list,
+                    "rating": avg_rating,
+                    "profile_picture": mentor.profile_image or "",
+                }
+            )
+
+        return response_dto
+
