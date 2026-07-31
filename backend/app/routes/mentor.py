@@ -24,3 +24,20 @@ def search_mentors():
         return jsonify(results), 200
     except ValidationError as err:
         return jsonify({"error": err.message}), 400
+
+
+@mentor_bp.route("/search/location", methods=["GET"])
+def search_mentors_by_location():
+    """
+    GET /api/mentors/search/location?location=<location>
+
+    Searches mentors by location (case insensitive, partial match).
+    """
+    location_query = request.args.get("location")
+
+    try:
+        results = MentorSearchService.search_mentors_by_location(location_query)
+        return jsonify(results), 200
+    except ValidationError as err:
+        return jsonify({"error": err.message}), 400
+
