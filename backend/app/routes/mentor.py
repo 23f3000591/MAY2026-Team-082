@@ -1,5 +1,7 @@
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import get_jwt_identity, jwt_required
 
+from app.services.favorite_service import ConflictError, FavoriteService
 from app.services.mentor_service import (
     MentorSearchService,
     NotFoundError,
@@ -86,6 +88,45 @@ def get_mentor_details(mentor_id_raw):
         return jsonify({"error": err.message}), 400
     except NotFoundError as err:
         return jsonify({"error": err.message}), 404
+
+
+@mentor_bp.route("/<mentor_id_raw>/favorite", methods=["POST"])
+@jwt_required()
+def add_favorite_mentor(mentor_id_raw):
+    """
+    POST /api/mentors/<mentor_id>/favorite
+
+    Adds a mentor to the authenticated learner's favorites.
+    """
+    user_id = int(get_jwt_identity())
+    try:
+        res = FavoriteService.add_favorite(user_id, mentor_id_raw)
+        return jsonify(res), 201
+    except ValidationError as err:
+        return jsonify({"error": err.message}), 400
+    except NotFoundError as err:
+        return jsonify({"error": err.message}), 404
+    except ConflictError as err:
+        return jsonify({"error": err.message}), 409
+
+
+@mentor_bp.route("/<mentor_id_raw>/favorite", methods=["DELETE"])
+@jwt_required()
+def remove_favorite_mentor(mentor_id_raw):
+    """
+    DELETE /api/mentors/<mentor_id>/favorite
+
+    Removes a mentor from the authenticated learner's favorites.
+    """
+    user_id = int(get_jwt_identity())
+    try:
+        res = FavoriteService.remove_favorite(user_id, mentor_id_raw)
+        return jsonify(res), 200
+    except ValidationError as err:
+        return jsonify({"error": err.message}), 400
+    except NotFoundError as err:
+        return jsonify({"error": err.message}), 404
+
 
 
 
