@@ -302,7 +302,72 @@ class MentorSearchTestCase(unittest.TestCase):
         mentor_ids = [m["id"] for m in data]
         self.assertNotIn(self.learner.user_id, mentor_ids)
 
+    # --- NSEP-24: Filter Mentors Tests ---
+
+    def test_filter_mentors_by_skill(self):
+        """Test filtering mentors by skill parameter."""
+        response = self.client.get("/api/mentors/filter?skill=Python")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertIsInstance(data, list)
+        mentor_ids = [m["id"] for m in data]
+        self.assertIn(self.mentor1.user_id, mentor_ids)
+
+    def test_filter_mentors_by_location(self):
+        """Test filtering mentors by location parameter."""
+        response = self.client.get("/api/mentors/filter?location=Chennai")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertIsInstance(data, list)
+        mentor_ids = [m["id"] for m in data]
+        self.assertIn(self.mentor1.user_id, mentor_ids)
+        self.assertIn(self.mentor2.user_id, mentor_ids)
+
+    def test_filter_mentors_by_minimum_rating(self):
+        """Test filtering mentors by minimum rating parameter (>= provided rating)."""
+        response = self.client.get("/api/mentors/filter?minimum_rating=4")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        mentor_ids = [m["id"] for m in data]
+        self.assertIn(self.mentor1.user_id, mentor_ids)
+
+        # High minimum rating should exclude mentor2 (rating=0.0)
+        response_high = self.client.get("/api/mentors/filter?minimum_rating=4.5")
+        data_high = response_high.get_json()
+        high_mentor_ids = [m["id"] for m in data_high]
+        self.assertIn(self.mentor1.user_id, high_mentor_ids)
+        self.assertNotIn(self.mentor2.user_id, high_mentor_ids)
+
+    def test_filter_mentors_multiple_filters(self):
+        """Test filtering mentors with multiple criteria simultaneously (AND logic)."""
+        response = self.client.get("/api/mentors/filter?skill=Python&location=Chennai&minimum_rating=4.5")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["id"], self.mentor1.user_id)
+        self.assertEqual(data[0]["name"], "John Doe")
+
+    def test_filter_mentors_no_results(self):
+        """Test filter combination that yields no matching mentors returns HTTP 200 []."""
+        response = self.client.get("/api/mentors/filter?skill=Java&location=Chennai")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), [])
+
+    def test_filter_mentors_invalid_minimum_rating(self):
+        """Test non-numeric minimum_rating returns HTTP 400 error."""
+        response = self.client.get("/api/mentors/filter?minimum_rating=invalid")
+        self.assertEqual(response.status_code, 400)
+
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"], "minimum_rating must be a valid number")
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

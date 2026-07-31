@@ -41,3 +41,24 @@ def search_mentors_by_location():
     except ValidationError as err:
         return jsonify({"error": err.message}), 400
 
+@mentor_bp.route("/filter", methods=["GET"])
+def filter_mentors():
+    """
+    GET /api/mentors/filter
+
+    Filters mentors dynamically by skill, location, and minimum_rating.
+    """
+    skill = request.args.get("skill")
+    location = request.args.get("location")
+    minimum_rating = request.args.get("minimum_rating")
+
+    try:
+        results = MentorSearchService.filter_mentors(
+            skill=skill,
+            location=location,
+            minimum_rating_raw=minimum_rating,
+        )
+        return jsonify(results), 200
+    except ValidationError as err:
+        return jsonify({"error": err.message}), 400
+
