@@ -293,6 +293,15 @@ class MentorSearchTestCase(unittest.TestCase):
         self.assertIn("error", data)
         self.assertEqual(data["error"], "location query parameter is required")
 
+    def test_search_mentors_by_location_excludes_non_mentors(self):
+        """Test non-mentor users in matching location are excluded from results."""
+        response = self.client.get("/api/mentors/search/location?location=Chennai")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        mentor_ids = [m["id"] for m in data]
+        self.assertNotIn(self.learner.user_id, mentor_ids)
+
     # --- NSEP-24: Filter Mentors Tests ---
 
     def test_filter_mentors_by_skill(self):
@@ -360,4 +369,5 @@ class MentorSearchTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 

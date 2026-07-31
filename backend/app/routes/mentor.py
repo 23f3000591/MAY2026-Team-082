@@ -41,7 +41,6 @@ def search_mentors_by_location():
     except ValidationError as err:
         return jsonify({"error": err.message}), 400
 
-
 @mentor_bp.route("/filter", methods=["GET"])
 def filter_mentors():
     """
