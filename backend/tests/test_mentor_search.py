@@ -1,9 +1,10 @@
 import unittest
-from datetime import date
+from datetime import date, time
 
 from app import create_app
 from app.config import Config
 from app.extensions import db
+from app.models.availability import Availability
 from app.models.review import Review
 from app.models.skill import Skill
 from app.models.society import Society
@@ -20,7 +21,7 @@ class TestConfig(Config):
 
 
 class MentorSearchTestCase(unittest.TestCase):
-    """Test suite for NSEP-22 Search Mentors by Skill endpoint."""
+    """Test suite for NSEP-22, NSEP-23, NSEP-24, NSEP-25 & NSEP-26 Search/Filter/Sort/Details Mentors endpoints."""
 
     def setUp(self):
         """Set up test app, database, and sample seed data before each test."""
@@ -80,10 +81,11 @@ class MentorSearchTestCase(unittest.TestCase):
             role="mentor",
             is_mentor=True,
             is_learner=False,
+            bio="Experienced Python mentor",
             profile_image="http://example.com/john.jpg",
         )
 
-        # Create Mentor 2 (is_mentor=True, possesses Python Web Development & PyTorch)
+        # Create Mentor 2 (is_mentor=True, possesses Python Web Development)
         mentor2 = User(
             society_id=self.society_id,
             full_name="Jane Smith",
@@ -93,10 +95,11 @@ class MentorSearchTestCase(unittest.TestCase):
             role="user",
             is_mentor=True,
             is_learner=False,
+            bio="Web development mentor",
             profile_image="http://example.com/jane.jpg",
         )
 
-        # Create Learner (is_mentor=False, has Python skill - should NOT be returned in mentor search)
+        # Create Learner (is_mentor=False, has Python skill)
         learner = User(
             society_id=self.society_id,
             full_name="Bob Learner",
@@ -112,20 +115,15 @@ class MentorSearchTestCase(unittest.TestCase):
         db.session.commit()
 
         # Link skills to users
-        # Mentor 1 has Python and Machine Learning (PyTorch)
         us1 = UserSkill(user_id=mentor1.user_id, skill_id=skill_python.skill_id, experience_level="Expert")
         us2 = UserSkill(user_id=mentor1.user_id, skill_id=skill_pytorch.skill_id, experience_level="Intermediate")
-
-        # Mentor 2 has Python Web Development
         us3 = UserSkill(user_id=mentor2.user_id, skill_id=skill_web.skill_id, experience_level="Expert")
-
-        # Learner has Python skill
         us4 = UserSkill(user_id=learner.user_id, skill_id=skill_python.skill_id, experience_level="Beginner")
 
         db.session.add_all([us1, us2, us3, us4])
         db.session.commit()
 
-        # Create reviews for Mentor 1 to test rating calculation
+        # Create reviews for Mentor 1
         review1 = Review(
             session_id=1,
             learner_id=learner.user_id,
@@ -141,6 +139,22 @@ class MentorSearchTestCase(unittest.TestCase):
             review_text="Good explanation.",
         )
         db.session.add_all([review1, review2])
+        db.session.commit()
+
+        # Add Availability for Mentor 1
+        avail1 = Availability(
+            user_id=mentor1.user_id,
+            day_of_week="Monday",
+            start_time=time(18, 0),
+            end_time=time(20, 0),
+        )
+        avail2 = Availability(
+            user_id=mentor1.user_id,
+            day_of_week="Wednesday",
+            start_time=time(20, 0),
+            end_time=time(21, 0),
+        )
+        db.session.add_all([avail1, avail2])
         db.session.commit()
 
         self.mentor1 = mentor1
@@ -162,29 +176,25 @@ class MentorSearchTestCase(unittest.TestCase):
         self.assertIsInstance(data, list)
         self.assertGreaterEqual(len(data), 1)
 
-        # Check fields of the returned mentor DTO
         mentor_data = next((m for m in data if m["id"] == self.mentor1.user_id), None)
         self.assertIsNotNone(mentor_data)
         self.assertEqual(mentor_data["name"], "John Doe")
         self.assertIn("Python", mentor_data["skills"])
         self.assertIn("PyTorch", mentor_data["skills"])
         self.assertEqual(mentor_data["location"], "Chennai")
-        self.assertEqual(mentor_data["rating"], 4.5)  # Avg of 5 and 4
+        self.assertEqual(mentor_data["rating"], 4.5)
         self.assertEqual(mentor_data["profile_picture"], "http://example.com/john.jpg")
 
     def test_search_mentors_no_results(self):
         """Test searching for non-existent skill returns HTTP 200 and empty list []."""
         response = self.client.get("/api/mentors/search?skill=Rust")
         self.assertEqual(response.status_code, 200)
-
-        data = response.get_json()
-        self.assertEqual(data, [])
+        self.assertEqual(response.get_json(), [])
 
     def test_search_mentors_missing_parameter(self):
         """Test missing skill query parameter returns HTTP 400 with expected error message."""
         response = self.client.get("/api/mentors/search")
         self.assertEqual(response.status_code, 400)
-
         data = response.get_json()
         self.assertIn("error", data)
         self.assertEqual(data["error"], "skill query parameter is required")
@@ -193,7 +203,6 @@ class MentorSearchTestCase(unittest.TestCase):
         """Test empty skill query parameter returns HTTP 400 with expected error message."""
         response = self.client.get("/api/mentors/search?skill=")
         self.assertEqual(response.status_code, 400)
-
         data = response.get_json()
         self.assertIn("error", data)
         self.assertEqual(data["error"], "skill query parameter is required")
@@ -211,11 +220,8 @@ class MentorSearchTestCase(unittest.TestCase):
         """Test partial string search ('py' matching 'Python', 'PyTorch', 'Python Web Development')."""
         response = self.client.get("/api/mentors/search?skill=py")
         self.assertEqual(response.status_code, 200)
-
         data = response.get_json()
         mentor_ids = [m["id"] for m in data]
-
-        # Both mentor1 and mentor2 should match
         self.assertIn(self.mentor1.user_id, mentor_ids)
         self.assertIn(self.mentor2.user_id, mentor_ids)
 
@@ -223,11 +229,8 @@ class MentorSearchTestCase(unittest.TestCase):
         """Test that non-mentor users having the requested skill are excluded from search results."""
         response = self.client.get("/api/mentors/search?skill=python")
         self.assertEqual(response.status_code, 200)
-
         data = response.get_json()
         mentor_ids = [m["id"] for m in data]
-
-        # Learner has Python skill, but is_mentor=False and role='user', so should NOT be returned
         self.assertNotIn(self.learner.user_id, mentor_ids)
 
     # --- NSEP-23: Search Mentors by Location Tests ---
@@ -435,6 +438,73 @@ class MentorSearchTestCase(unittest.TestCase):
         data = response.get_json()
         self.assertIn("error", data)
         self.assertEqual(data["error"], "Invalid sort order")
+
+    # --- NSEP-26: View Mentor Details Tests ---
+
+    def test_get_mentor_details_valid(self):
+        """Test valid mentor ID returns HTTP 200 and complete details DTO."""
+        response = self.client.get(f"/api/mentors/{self.mentor1.user_id}")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertEqual(data["id"], self.mentor1.user_id)
+        self.assertEqual(data["name"], "John Doe")
+        self.assertEqual(data["bio"], "Experienced Python mentor")
+        self.assertEqual(data["location"], "Chennai")
+        self.assertIn("Python", data["skills"])
+        self.assertIn("PyTorch", data["skills"])
+        self.assertEqual(data["rating"], 4.5)
+        self.assertEqual(data["review_count"], 2)
+        self.assertIn("Monday 6 PM", data["availability"])
+        self.assertIn("Wednesday 8 PM", data["availability"])
+        self.assertEqual(data["profile_picture"], "http://example.com/john.jpg")
+
+    def test_get_mentor_details_not_found(self):
+        """Test non-existent mentor ID returns HTTP 404 Not Found error."""
+        response = self.client.get("/api/mentors/99999")
+        self.assertEqual(response.status_code, 404)
+
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"], "Mentor not found")
+
+    def test_get_mentor_details_invalid_id(self):
+        """Test invalid mentor ID (non-integer) returns HTTP 400 Bad Request error."""
+        response = self.client.get("/api/mentors/abc")
+        self.assertEqual(response.status_code, 400)
+
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"], "Invalid mentor ID")
+
+    def test_get_mentor_details_multiple_skills(self):
+        """Test mentor with multiple skills returns all skill names."""
+        response = self.client.get(f"/api/mentors/{self.mentor1.user_id}")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertEqual(len(data["skills"]), 2)
+        self.assertCountEqual(data["skills"], ["Python", "PyTorch"])
+
+    def test_get_mentor_details_no_reviews(self):
+        """Test mentor with no reviews returns rating 0.0 and review_count 0."""
+        response = self.client.get(f"/api/mentors/{self.mentor2.user_id}")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertEqual(data["rating"], 0.0)
+        self.assertEqual(data["review_count"], 0)
+
+    def test_get_mentor_details_availability(self):
+        """Test mentor availability retrieval formats day and start time."""
+        response = self.client.get(f"/api/mentors/{self.mentor1.user_id}")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertIsInstance(data["availability"], list)
+        self.assertEqual(len(data["availability"]), 2)
+        self.assertIn("Monday 6 PM", data["availability"])
+        self.assertIn("Wednesday 8 PM", data["availability"])
 
 
 if __name__ == "__main__":
