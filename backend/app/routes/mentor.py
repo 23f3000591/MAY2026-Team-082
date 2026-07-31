@@ -46,19 +46,24 @@ def filter_mentors():
     """
     GET /api/mentors/filter
 
-    Filters mentors dynamically by skill, location, and minimum_rating.
+    Filters and sorts mentors dynamically by skill, location, minimum_rating, sort, and order.
     """
     skill = request.args.get("skill")
     location = request.args.get("location")
     minimum_rating = request.args.get("minimum_rating")
+    sort = request.args.get("sort")
+    order = request.args.get("order")
 
     try:
         results = MentorSearchService.filter_mentors(
             skill=skill,
             location=location,
             minimum_rating_raw=minimum_rating,
+            sort=sort,
+            order=order,
         )
         return jsonify(results), 200
     except ValidationError as err:
         return jsonify({"error": err.message}), 400
+
 

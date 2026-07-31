@@ -366,8 +366,79 @@ class MentorSearchTestCase(unittest.TestCase):
         self.assertIn("error", data)
         self.assertEqual(data["error"], "minimum_rating must be a valid number")
 
+    # --- NSEP-25: Sort Search Results Tests ---
+
+    def test_sort_mentors_by_rating_asc(self):
+        """Test sorting mentors by rating ascending (0.0 to 5.0)."""
+        response = self.client.get("/api/mentors/filter?sort=rating&order=asc")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertGreaterEqual(len(data), 2)
+        ratings = [m["rating"] for m in data]
+        self.assertEqual(ratings, sorted(ratings))
+
+    def test_sort_mentors_by_rating_desc(self):
+        """Test sorting mentors by rating descending (5.0 to 0.0)."""
+        response = self.client.get("/api/mentors/filter?sort=rating&order=desc")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertGreaterEqual(len(data), 2)
+        ratings = [m["rating"] for m in data]
+        self.assertEqual(ratings, sorted(ratings, reverse=True))
+
+    def test_sort_mentors_by_name_asc(self):
+        """Test sorting mentors by name ascending (A to Z)."""
+        response = self.client.get("/api/mentors/filter?sort=name&order=asc")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertGreaterEqual(len(data), 2)
+        names = [m["name"] for m in data]
+        self.assertEqual(names, sorted(names))
+
+    def test_sort_mentors_by_name_desc(self):
+        """Test sorting mentors by name descending (Z to A)."""
+        response = self.client.get("/api/mentors/filter?sort=name&order=desc")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertGreaterEqual(len(data), 2)
+        names = [m["name"] for m in data]
+        self.assertEqual(names, sorted(names, reverse=True))
+
+    def test_sort_mentors_combined_with_filters(self):
+        """Test sorting combined with filtering (skill=Python&sort=rating&order=desc)."""
+        response = self.client.get("/api/mentors/filter?skill=Python&sort=rating&order=desc")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertGreaterEqual(len(data), 1)
+        ratings = [m["rating"] for m in data]
+        self.assertEqual(ratings, sorted(ratings, reverse=True))
+
+    def test_sort_mentors_invalid_sort_field(self):
+        """Test invalid sort field returns HTTP 400 error."""
+        response = self.client.get("/api/mentors/filter?sort=invalid")
+        self.assertEqual(response.status_code, 400)
+
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"], "Invalid sort field")
+
+    def test_sort_mentors_invalid_order_value(self):
+        """Test invalid order value returns HTTP 400 error."""
+        response = self.client.get("/api/mentors/filter?sort=rating&order=invalid")
+        self.assertEqual(response.status_code, 400)
+
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"], "Invalid sort order")
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
