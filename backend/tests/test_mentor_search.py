@@ -1,10 +1,12 @@
 import unittest
 from datetime import date, time
+from flask_jwt_extended import create_access_token
 
 from app import create_app
 from app.config import Config
 from app.extensions import db
 from app.models.availability import Availability
+from app.models.favorite import Favorite
 from app.models.review import Review
 from app.models.skill import Skill
 from app.models.society import Society
@@ -21,7 +23,7 @@ class TestConfig(Config):
 
 
 class MentorSearchTestCase(unittest.TestCase):
-    """Test suite for NSEP-22, NSEP-23, NSEP-24, NSEP-25 & NSEP-26 Search/Filter/Sort/Details Mentors endpoints."""
+    """Test suite for NSEP-22, NSEP-23, NSEP-24, NSEP-25, NSEP-26 & NSEP-27 endpoints."""
 
     def setUp(self):
         """Set up test app, database, and sample seed data before each test."""
@@ -160,6 +162,11 @@ class MentorSearchTestCase(unittest.TestCase):
         self.mentor1 = mentor1
         self.mentor2 = mentor2
         self.learner = learner
+
+        # Generate JWT Auth Headers for Learner
+        token = create_access_token(identity=str(learner.user_id))
+        self.auth_headers = {"Authorization": f"Bearer {token}"}
+
 
     def tearDown(self):
         """Tear down database session and context after each test."""
@@ -506,9 +513,108 @@ class MentorSearchTestCase(unittest.TestCase):
         self.assertIn("Monday 6 PM", data["availability"])
         self.assertIn("Wednesday 8 PM", data["availability"])
 
+    # --- NSEP-27: Save Favorite Mentors Tests ---
+
+    def test_add_favorite_mentor(self):
+        """Test adding a valid mentor to favorites returns HTTP 201 Created."""
+        response = self.client.post(
+            f"/api/mentors/{self.mentor1.user_id}/favorite",
+            headers=self.auth_headers,
+        )
+        self.assertEqual(response.status_code, 201)
+
+        data = response.get_json()
+        self.assertIn("message", data)
+        self.assertEqual(data["message"], "Mentor added to favorites")
+
+    def test_add_duplicate_favorite_mentor(self):
+        """Test adding an already favorited mentor returns HTTP 409 Conflict."""
+        # Add first time
+        self.client.post(
+            f"/api/mentors/{self.mentor1.user_id}/favorite",
+            headers=self.auth_headers,
+        )
+
+        # Add second time
+        response = self.client.post(
+            f"/api/mentors/{self.mentor1.user_id}/favorite",
+            headers=self.auth_headers,
+        )
+        self.assertEqual(response.status_code, 409)
+
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"], "Mentor already added to favorites")
+
+    def test_add_favorite_mentor_not_found(self):
+        """Test adding non-existent mentor returns HTTP 404 Not Found."""
+        response = self.client.post(
+            "/api/mentors/99999/favorite",
+            headers=self.auth_headers,
+        )
+        self.assertEqual(response.status_code, 404)
+
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"], "Mentor not found")
+
+    def test_remove_favorite_mentor(self):
+        """Test removing a favorite mentor returns HTTP 200 OK."""
+        # First add favorite
+        self.client.post(
+            f"/api/mentors/{self.mentor1.user_id}/favorite",
+            headers=self.auth_headers,
+        )
+
+        # Remove favorite
+        response = self.client.delete(
+            f"/api/mentors/{self.mentor1.user_id}/favorite",
+            headers=self.auth_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertIn("message", data)
+        self.assertEqual(data["message"], "Mentor removed from favorites")
+
+    def test_remove_non_existing_favorite(self):
+        """Test removing a mentor that is not in favorites returns HTTP 404 Not Found."""
+        response = self.client.delete(
+            f"/api/mentors/{self.mentor1.user_id}/favorite",
+            headers=self.auth_headers,
+        )
+        self.assertEqual(response.status_code, 404)
+
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"], "Favorite mentor not found")
+
+    def test_get_user_favorites(self):
+        """Test listing favorite mentors returns HTTP 200 and list of favorite mentor DTOs."""
+        # Add mentor1 to favorites
+        self.client.post(
+            f"/api/mentors/{self.mentor1.user_id}/favorite",
+            headers=self.auth_headers,
+        )
+
+        response = self.client.get("/api/users/me/favorites", headers=self.auth_headers)
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), 1)
+
+        fav_mentor = data[0]
+        self.assertEqual(fav_mentor["id"], self.mentor1.user_id)
+        self.assertEqual(fav_mentor["name"], "John Doe")
+        self.assertEqual(fav_mentor["location"], "Chennai")
+        self.assertEqual(fav_mentor["rating"], 4.5)
+        self.assertIn("Python", fav_mentor["skills"])
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 
