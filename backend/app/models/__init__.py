@@ -1,4 +1,5 @@
 from .availability import Availability
+from .favorite import Favorite
 from .message import Message
 from .notification import Notification
 from .report import Report
@@ -8,3 +9,4 @@ from .skill import Skill
 from .society import Society
 from .user import User
 from .user_skill import UserSkill
+
