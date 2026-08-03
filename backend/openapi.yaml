@@ -1,0 +1,1428 @@
+openapi: 3.0.3
+
+info:
+  title: Neighbourhood Skill Exchange Platform API
+  description: |
+    RESTful API documentation for the Neighbourhood Skill Exchange Platform.
+
+    This API was developed as part of Sprint 1 and provides backend services
+    for user authentication, profile management, mentor availability management,
+    and session booking.
+
+    The API follows REST principles and uses JSON as the request and response format.
+
+    Authentication is implemented using JSON Web Tokens (JWT).
+
+  version: 1.0.0
+  contact:
+    name: Sprint 1 Development Team
+
+servers:
+  - url: /api
+    description: Development Server
+
+tags:
+  - name: Authentication
+    description: User registration, authentication and password management.
+
+  - name: Profile
+    description: User profile management APIs.
+
+  - name: Availability
+    description: Mentor availability management.
+
+  - name: Sessions
+    description: Session booking and management.
+
+security:
+  - bearerAuth: []
+
+components:
+
+  securitySchemes:
+
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+
+    SuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+
+        message:
+          type: string
+          example: Operation completed successfully.
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+
+        message:
+          type: string
+          example: Validation failed.
+
+    User:
+      type: object
+
+      properties:
+
+        user_id:
+          type: integer
+          example: 1
+
+        full_name:
+          type: string
+          example: John Doe
+
+        email:
+          type: string
+          example: john@example.com
+
+        phone_number:
+          type: string
+          example: "9876543210"
+
+        society_id:
+          type: integer
+          example: 12
+
+        role:
+          type: string
+          example: learner
+
+        is_learner:
+          type: boolean
+
+        is_mentor:
+          type: boolean
+
+        is_verified:
+          type: boolean
+
+        created_at:
+          type: string
+          format: date-time
+
+    LoginRequest:
+      type: object
+
+      required:
+        - email
+        - password
+
+      properties:
+
+        email:
+          type: string
+          example: john@example.com
+
+        password:
+          type: string
+          example: SecurePassword123!
+
+    LearnerRegistrationRequest:
+      type: object
+
+      required:
+        - full_name
+        - email
+        - password
+        - phone_number
+        - society_id
+
+      properties:
+
+        full_name:
+          type: string
+
+        email:
+          type: string
+
+        password:
+          type: string
+
+        phone_number:
+          type: string
+
+        society_id:
+          type: integer
+
+    MentorRegistrationRequest:
+      allOf:
+        - $ref: '#/components/schemas/LearnerRegistrationRequest'
+
+    ForgotPasswordRequest:
+      type: object
+
+      required:
+        - email
+
+      properties:
+
+        email:
+          type: string
+
+    ResetPasswordRequest:
+      type: object
+
+      required:
+        - token
+        - new_password
+
+      properties:
+
+        token:
+          type: string
+
+        new_password:
+          type: string
+
+    Profile:
+      type: object
+      properties:
+        user_id:
+          type: integer
+          example: 1
+        bio:
+          type: string
+          example: Passionate about teaching programming.
+        profile_image:
+          type: string
+          example: https://example.com/profile.jpg
+        is_learner:
+          type: boolean
+        is_mentor:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+
+    Skill:
+      type: object
+      properties:
+        skill_id:
+          type: integer
+          example: 5
+        skill_name:
+          type: string
+          example: Python Programming
+        experience_level:
+          type: string
+          example: Advanced
+        years_of_experience:
+          type: integer
+          example: 6
+        description:
+          type: string
+          example: Backend development using Flask and Django.
+
+    Availability:
+      type: object
+      properties:
+        availability_id:
+          type: integer
+          example: 12
+        user_id:
+          type: integer
+          example: 4
+        day_of_week:
+          type: string
+          example: Saturday
+        start_time:
+          type: string
+          example: "09:00"
+        end_time:
+          type: string
+          example: "11:00"
+
+    Session:
+      type: object
+      properties:
+        session_id:
+          type: integer
+          example: 101
+        learner_id:
+          type: integer
+          example: 7
+        mentor_id:
+          type: integer
+          example: 3
+        skill_id:
+          type: integer
+          example: 5
+        availability_id:
+          type: integer
+          example: 12
+        session_mode:
+          type: string
+          example: Online
+        session_date:
+          type: string
+          format: date
+        meeting_link:
+          type: string
+          example: https://meet.google.com/example
+        location:
+          type: string
+          example: Community Hall
+        status:
+          type: string
+          example: Pending
+        learner_note:
+          type: string
+          example: Looking forward to the session.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SessionRequest:
+      type: object
+      required:
+        - mentor_id
+        - skill_id
+        - availability_id
+        - session_mode
+        - session_date
+      properties:
+        mentor_id:
+          type: integer
+        skill_id:
+          type: integer
+        availability_id:
+          type: integer
+        session_mode:
+          type: string
+          enum:
+            - Online
+            - Offline
+        session_date:
+          type: string
+          format: date
+        meeting_link:
+          type: string
+        location:
+          type: string
+        learner_note:
+          type: string
+
+    SessionRescheduleRequest:
+      type: object
+      required:
+        - session_date
+      properties:
+        session_date:
+          type: string
+          format: date
+        availability_id:
+          type: integer
+        meeting_link:
+          type: string
+        location:
+          type: string
+    
+
+paths:
+
+  /auth/register:
+
+    post:
+
+      tags:
+        - Authentication
+
+      summary: Register Learner
+
+      description: |
+        Registers a new learner account.
+
+        **User Story**
+        - Register as Learner
+
+        Validation:
+        - Email must be unique.
+        - Phone number must be unique.
+        - Society ID must exist.
+
+      requestBody:
+
+        required: true
+
+        content:
+
+          application/json:
+
+            schema:
+              $ref: '#/components/schemas/LearnerRegistrationRequest'
+
+      responses:
+
+        "201":
+          description: Learner registered successfully.
+
+          content:
+
+            application/json:
+
+              schema:
+                $ref: '#/components/schemas/User'
+
+        "400":
+          description: Validation Error
+
+        "409":
+          description: Duplicate Email / Phone
+
+        "500":
+          description: Internal Server Error
+
+  /auth/register/mentor:
+
+    post:
+
+      tags:
+        - Authentication
+
+      summary: Register Mentor
+
+      description: |
+        Registers a new mentor account.
+
+        **User Story**
+        - Register as Mentor
+
+      requestBody:
+
+        required: true
+
+        content:
+
+          application/json:
+
+            schema:
+              $ref: '#/components/schemas/MentorRegistrationRequest'
+
+      responses:
+
+        "201":
+          description: Mentor registered successfully.
+
+        "400":
+          description: Validation Error
+
+        "409":
+          description: Duplicate Email / Phone
+
+        "500":
+          description: Internal Server Error
+
+  /auth/login:
+
+    post:
+
+      tags:
+        - Authentication
+
+      summary: Login
+
+      description: |
+        Authenticates a user and returns a JWT access token.
+
+      requestBody:
+
+        required: true
+
+        content:
+
+          application/json:
+
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+
+      responses:
+
+        "200":
+          description: Login successful.
+
+        "400":
+          description: Validation Error
+
+        "401":
+          description: Invalid credentials
+
+        "500":
+          description: Internal Server Error
+
+  /auth/logout:
+
+    post:
+
+      tags:
+        - Authentication
+
+      summary: Logout
+
+      security:
+        - bearerAuth: []
+
+      description: |
+        Revokes the currently authenticated JWT token.
+
+      responses:
+
+        "200":
+          description: Logout successful.
+
+        "401":
+          description: Unauthorized
+
+        "500":
+          description: Internal Server Error
+
+  /auth/forgot-password:
+
+    post:
+
+      tags:
+        - Authentication
+
+      summary: Forgot Password
+
+      description: |
+        Generates a password reset request.
+
+      requestBody:
+
+        required: true
+
+        content:
+
+          application/json:
+
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+
+      responses:
+
+        "200":
+          description: Password reset link generated.
+
+        "400":
+          description: Validation Error
+
+        "500":
+          description: Internal Server Error
+
+  /auth/reset-password:
+
+    post:
+
+      tags:
+        - Authentication
+
+      summary: Reset Password
+
+      description: |
+        Resets the password using a valid password reset token.
+
+      requestBody:
+
+        required: true
+
+        content:
+
+          application/json:
+
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+
+      responses:
+
+        "200":
+          description: Password reset successful.
+
+        "400":
+          description: Invalid token
+
+        "500":
+          description: Internal Server Error
+
+
+  /profile/learner:
+
+    post:
+
+      tags:
+        - Profile
+
+      summary: Create Learner Profile
+
+      security:
+        - bearerAuth: []
+
+      description: |
+        Creates or completes the learner profile for the authenticated user.
+
+        User Story:
+        - Complete Learner Profile
+
+        Authentication:
+        - JWT Bearer Token Required
+
+      requestBody:
+
+        required: true
+
+        content:
+
+          application/json:
+
+            schema:
+              type: object
+
+              properties:
+
+                bio:
+                  type: string
+                  example: Passionate about learning new skills.
+
+      responses:
+
+        "200":
+
+          description: Learner profile created successfully.
+
+          content:
+
+            application/json:
+
+              schema:
+
+                type: object
+
+                properties:
+
+                  status:
+                    type: string
+                    example: success
+
+                  message:
+                    type: string
+                    example: Learner profile created successfully
+
+                  data:
+                    $ref: '#/components/schemas/Profile'
+
+        "400":
+          description: Validation Error
+
+        "401":
+          description: Unauthorized
+
+        "500":
+          description: Internal Server Error
+
+
+
+  /profile/mentor:
+
+    post:
+
+      tags:
+        - Profile
+
+      summary: Create Mentor Profile
+
+      security:
+        - bearerAuth: []
+
+      description: |
+        Creates or completes the mentor profile for the authenticated user.
+
+        User Story:
+        - Complete Mentor Profile
+
+      requestBody:
+
+        required: true
+
+        content:
+
+          application/json:
+
+            schema:
+
+              type: object
+
+              properties:
+
+                bio:
+                  type: string
+
+      responses:
+
+        "200":
+
+          description: Mentor profile created successfully.
+
+          content:
+
+            application/json:
+
+              schema:
+
+                type: object
+
+                properties:
+
+                  status:
+                    type: string
+
+                  message:
+                    type: string
+
+                  data:
+                    $ref: '#/components/schemas/Profile'
+
+        "400":
+          description: Validation Error
+
+        "401":
+          description: Unauthorized
+
+        "500":
+          description: Internal Server Error
+
+
+
+  /profile:
+
+    put:
+
+      tags:
+        - Profile
+
+      summary: Update Profile
+
+      security:
+        - bearerAuth: []
+
+      description: |
+        Updates the profile details of the authenticated user.
+
+      requestBody:
+
+        required: true
+
+        content:
+
+          application/json:
+
+            schema:
+              $ref: '#/components/schemas/Profile'
+
+      responses:
+
+        "200":
+          description: Profile updated successfully.
+
+        "400":
+          description: Validation Error
+
+        "401":
+          description: Unauthorized
+
+        "500":
+          description: Internal Server Error
+
+
+
+  /profile/picture:
+
+    put:
+
+      tags:
+        - Profile
+
+      summary: Upload Profile Picture
+
+      security:
+        - bearerAuth: []
+
+      description: |
+        Updates the authenticated user's profile picture.
+
+      requestBody:
+
+        required: true
+
+        content:
+
+          application/json:
+
+            schema:
+
+              type: object
+
+              properties:
+
+                profile_image:
+                  type: string
+                  example: https://example.com/profile.jpg
+
+      responses:
+
+        "200":
+          description: Profile picture updated successfully.
+
+        "400":
+          description: Validation Error
+
+        "401":
+          description: Unauthorized
+
+        "500":
+          description: Internal Server Error
+
+
+
+  /profile/skills:
+
+    post:
+
+      tags:
+        - Profile
+
+      summary: Add Skill
+
+      security:
+        - bearerAuth: []
+
+      description: |
+        Adds a new skill to the authenticated user's profile.
+
+      requestBody:
+
+        required: true
+
+        content:
+
+          application/json:
+
+            schema:
+              $ref: '#/components/schemas/Skill'
+
+      responses:
+
+        "201":
+          description: Skill added successfully.
+
+        "400":
+          description: Validation Error
+
+        "401":
+          description: Unauthorized
+
+        "500":
+          description: Internal Server Error
+
+
+
+  /profile/mentor/{user_id}:
+
+    get:
+
+      tags:
+        - Profile
+
+      summary: View Mentor Profile
+
+      security:
+        - bearerAuth: []
+
+      description: |
+        Retrieves the public profile of a mentor together with skills and review summary.
+
+      parameters:
+
+        - name: user_id
+
+          in: path
+
+          required: true
+
+          schema:
+
+            type: integer
+
+      responses:
+
+        "200":
+
+          description: Mentor profile retrieved successfully.
+
+          content:
+
+            application/json:
+
+              schema:
+                $ref: '#/components/schemas/Profile'
+
+        "404":
+          description: Mentor not found.
+
+        "401":
+          description: Unauthorized
+
+        "500":
+          description: Internal Server Error
+
+
+
+  /profile/learner/{user_id}:
+
+    get:
+
+      tags:
+        - Profile
+
+      summary: View Learner Profile
+
+      security:
+        - bearerAuth: []
+
+      description: |
+        Retrieves the public profile of a learner.
+
+      parameters:
+
+        - name: user_id
+
+          in: path
+
+          required: true
+
+          schema:
+
+            type: integer
+
+      responses:
+
+        "200":
+
+          description: Learner profile retrieved successfully.
+
+          content:
+
+            application/json:
+
+              schema:
+                $ref: '#/components/schemas/Profile'
+
+        "404":
+          description: Learner not found.
+
+        "401":
+          description: Unauthorized
+
+        "500":
+          description: Internal Server Error
+
+  /availability:
+
+    post:
+
+      tags:
+        - Availability
+
+      summary: Set Mentor Availability
+
+      security:
+        - bearerAuth: []
+
+      description: |
+        Creates a new availability slot for the authenticated mentor.
+
+        User Story:
+        - Mentor sets available time slots for learners to book sessions.
+
+        Authentication:
+        - JWT Bearer Token Required
+
+      requestBody:
+
+        required: true
+
+        content:
+
+          application/json:
+
+            schema:
+              $ref: '#/components/schemas/Availability'
+
+      responses:
+
+        "201":
+
+          description: Availability slot created successfully.
+
+          content:
+
+            application/json:
+
+              schema:
+
+                type: object
+
+                properties:
+
+                  status:
+                    type: string
+                    example: success
+
+                  message:
+                    type: string
+                    example: Availability slot added successfully
+
+                  data:
+                    $ref: '#/components/schemas/Availability'
+
+        "400":
+          description: Validation Error
+
+        "401":
+          description: Unauthorized
+
+        "500":
+          description: Internal Server Error
+
+
+
+  /availability/mentor/{mentor_id}:
+
+    get:
+
+      tags:
+        - Availability
+
+      summary: View Mentor Availability
+
+      security:
+        - bearerAuth: []
+
+      description: |
+        Retrieves all available booking slots for a specified mentor.
+
+        User Story:
+        - Learner views mentor availability before requesting a booking.
+
+      parameters:
+
+        - name: mentor_id
+
+          in: path
+
+          required: true
+
+          description: Unique identifier of the mentor.
+
+          schema:
+
+            type: integer
+
+            example: 12
+
+      responses:
+
+        "200":
+
+          description: Mentor availability retrieved successfully.
+
+          content:
+
+            application/json:
+
+              schema:
+
+                type: object
+
+                properties:
+
+                  status:
+                    type: string
+                    example: success
+
+                  message:
+                    type: string
+                    example: Available slots retrieved successfully
+
+                  data:
+
+                    type: array
+
+                    items:
+                      $ref: '#/components/schemas/Availability'
+
+        "401":
+          description: Unauthorized
+
+        "404":
+          description: Mentor not found
+
+        "500":
+          description: Internal Server Error
+
+  /sessions:
+
+    post:
+
+      tags:
+        - Sessions
+
+      summary: Book a Session
+
+      security:
+        - bearerAuth: []
+
+      description: |
+        Creates a new mentoring session booking request between a learner and mentor.
+
+        User Story:
+        - Learner books a mentoring session with an available mentor.
+
+        Authentication:
+        - JWT Bearer Token Required
+
+      requestBody:
+
+        required: true
+
+        content:
+
+          application/json:
+
+            schema:
+              $ref: '#/components/schemas/SessionRequest'
+
+      responses:
+
+        "201":
+
+          description: Booking request created successfully.
+
+          content:
+
+            application/json:
+
+              schema:
+
+                type: object
+
+                properties:
+
+                  status:
+                    type: string
+                    example: success
+
+                  message:
+                    type: string
+                    example: Booking request sent successfully
+
+                  data:
+                    $ref: '#/components/schemas/Session'
+
+        "400":
+          description: Validation Error
+
+        "401":
+          description: Unauthorized
+
+        "500":
+          description: Internal Server Error
+
+
+
+  /sessions/{session_id}/accept:
+
+    put:
+
+      tags:
+        - Sessions
+
+      summary: Accept Booking
+
+      security:
+        - bearerAuth: []
+
+      description: |
+        Allows the mentor to accept a pending booking request.
+
+      parameters:
+
+        - in: path
+
+          name: session_id
+
+          required: true
+
+          schema:
+            type: integer
+
+      responses:
+
+        "200":
+
+          description: Booking accepted successfully.
+
+          content:
+
+            application/json:
+
+              schema:
+                $ref: '#/components/schemas/Session'
+
+        "400":
+          description: Validation Error
+
+        "401":
+          description: Unauthorized
+
+        "500":
+          description: Internal Server Error
+
+
+
+  /sessions/{session_id}/reject:
+
+    put:
+
+      tags:
+        - Sessions
+
+      summary: Reject Booking
+
+      security:
+        - bearerAuth: []
+
+      description: |
+        Allows the mentor to reject a pending booking request.
+
+      parameters:
+
+        - in: path
+
+          name: session_id
+
+          required: true
+
+          schema:
+            type: integer
+
+      responses:
+
+        "200":
+
+          description: Booking rejected successfully.
+
+          content:
+
+            application/json:
+
+              schema:
+                $ref: '#/components/schemas/Session'
+
+        "400":
+          description: Validation Error
+
+        "401":
+          description: Unauthorized
+
+        "500":
+          description: Internal Server Error
+
+
+
+  /sessions/{session_id}/cancel:
+
+    put:
+
+      tags:
+        - Sessions
+
+      summary: Cancel Session
+
+      security:
+        - bearerAuth: []
+
+      description: |
+        Allows either the learner or mentor to cancel an active session booking.
+
+      parameters:
+
+        - in: path
+
+          name: session_id
+
+          required: true
+
+          schema:
+            type: integer
+
+      responses:
+
+        "200":
+
+          description: Booking cancelled successfully.
+
+          content:
+
+            application/json:
+
+              schema:
+                $ref: '#/components/schemas/Session'
+
+        "400":
+          description: Validation Error
+
+        "401":
+          description: Unauthorized
+
+        "500":
+          description: Internal Server Error
+
+
+
+  /sessions/{session_id}/reschedule:
+
+    put:
+
+      tags:
+        - Sessions
+
+      summary: Reschedule Session
+
+      security:
+        - bearerAuth: []
+
+      description: |
+        Allows either the learner or mentor to reschedule an existing session.
+
+      parameters:
+
+        - in: path
+
+          name: session_id
+
+          required: true
+
+          schema:
+            type: integer
+
+      requestBody:
+
+        required: true
+
+        content:
+
+          application/json:
+
+            schema:
+              $ref: '#/components/schemas/SessionRescheduleRequest'
+
+      responses:
+
+        "200":
+
+          description: Session rescheduled successfully.
+
+          content:
+
+            application/json:
+
+              schema:
+                $ref: '#/components/schemas/Session'
+
+        "400":
+          description: Validation Error
+
+        "401":
+          description: Unauthorized
+
+        "500":
+          description: Internal Server Error
+
+
+
+  /sessions/history:
+
+    get:
+
+      tags:
+        - Sessions
+
+      summary: View Booking History
+
+      security:
+        - bearerAuth: []
+
+      description: |
+        Retrieves the complete booking history of the authenticated user.
+
+        Results may optionally be filtered by booking status.
+
+      parameters:
+
+        - in: query
+
+          name: status
+
+          required: false
+
+          description: Filter bookings by status.
+
+          schema:
+
+            type: string
+
+            enum:
+              - Pending
+              - Accepted
+              - Rejected
+              - Cancelled
+
+      responses:
+
+        "200":
+
+          description: Booking history retrieved successfully.
+
+          content:
+
+            application/json:
+
+              schema:
+
+                type: array
+
+                items:
+                  $ref: '#/components/schemas/Session'
+
+        "400":
+          description: Validation Error
+
+        "401":
+          description: Unauthorized
+
+        "500":
+          description: Internal Server Error
