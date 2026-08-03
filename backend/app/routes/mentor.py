@@ -1,0 +1,132 @@
+from flask import Blueprint, jsonify, request
+from flask_jwt_extended import get_jwt_identity, jwt_required
+
+from app.services.favorite_service import ConflictError, FavoriteService
+from app.services.mentor_service import (
+    MentorSearchService,
+    NotFoundError,
+    ValidationError,
+)
+
+# Blueprint for mentor routes
+mentor_bp = Blueprint(
+    "mentor",
+    __name__,
+    url_prefix="/mentors",
+)
+
+
+@mentor_bp.route("/search", methods=["GET"])
+def search_mentors():
+    """
+    GET /api/mentors/search?skill=<skill_name>
+
+    Searches mentors by skill name (case insensitive, partial match).
+    """
+    skill_query = request.args.get("skill")
+
+    try:
+        results = MentorSearchService.search_mentors_by_skill(skill_query)
+        return jsonify(results), 200
+    except ValidationError as err:
+        return jsonify({"error": err.message}), 400
+
+
+@mentor_bp.route("/search/location", methods=["GET"])
+def search_mentors_by_location():
+    """
+    GET /api/mentors/search/location?location=<location>
+
+    Searches mentors by location (case insensitive, partial match).
+    """
+    location_query = request.args.get("location")
+
+    try:
+        results = MentorSearchService.search_mentors_by_location(location_query)
+        return jsonify(results), 200
+    except ValidationError as err:
+        return jsonify({"error": err.message}), 400
+
+
+@mentor_bp.route("/filter", methods=["GET"])
+def filter_mentors():
+    """
+    GET /api/mentors/filter
+
+    Filters and sorts mentors dynamically by skill, location, minimum_rating, sort, and order.
+    """
+    skill = request.args.get("skill")
+    location = request.args.get("location")
+    minimum_rating = request.args.get("minimum_rating")
+    sort = request.args.get("sort")
+    order = request.args.get("order")
+
+    try:
+        results = MentorSearchService.filter_mentors(
+            skill=skill,
+            location=location,
+            minimum_rating_raw=minimum_rating,
+            sort=sort,
+            order=order,
+        )
+        return jsonify(results), 200
+    except ValidationError as err:
+        return jsonify({"error": err.message}), 400
+
+
+@mentor_bp.route("/<mentor_id_raw>", methods=["GET"])
+def get_mentor_details(mentor_id_raw):
+    """
+    GET /api/mentors/<mentor_id>
+
+    Retrieves complete details for a specific mentor.
+    """
+    try:
+        details = MentorSearchService.get_mentor_details(mentor_id_raw)
+        return jsonify(details), 200
+    except ValidationError as err:
+        return jsonify({"error": err.message}), 400
+    except NotFoundError as err:
+        return jsonify({"error": err.message}), 404
+
+
+@mentor_bp.route("/<mentor_id_raw>/favorite", methods=["POST"])
+@jwt_required()
+def add_favorite_mentor(mentor_id_raw):
+    """
+    POST /api/mentors/<mentor_id>/favorite
+
+    Adds a mentor to the authenticated learner's favorites.
+    """
+    user_id = int(get_jwt_identity())
+    try:
+        res = FavoriteService.add_favorite(user_id, mentor_id_raw)
+        return jsonify(res), 201
+    except ValidationError as err:
+        return jsonify({"error": err.message}), 400
+    except NotFoundError as err:
+        return jsonify({"error": err.message}), 404
+    except ConflictError as err:
+        return jsonify({"error": err.message}), 409
+
+
+@mentor_bp.route("/<mentor_id_raw>/favorite", methods=["DELETE"])
+@jwt_required()
+def remove_favorite_mentor(mentor_id_raw):
+    """
+    DELETE /api/mentors/<mentor_id>/favorite
+
+    Removes a mentor from the authenticated learner's favorites.
+    """
+    user_id = int(get_jwt_identity())
+    try:
+        res = FavoriteService.remove_favorite(user_id, mentor_id_raw)
+        return jsonify(res), 200
+    except ValidationError as err:
+        return jsonify({"error": err.message}), 400
+    except NotFoundError as err:
+        return jsonify({"error": err.message}), 404
+
+
+
+
