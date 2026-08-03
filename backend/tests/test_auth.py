@@ -1,117 +1,64 @@
-import unittest
-from datetime import timedelta
+import pytest
+from app.models.user import User
 from werkzeug.security import check_password_hash
 from flask_jwt_extended import create_access_token
+from datetime import timedelta
 
-from app import create_app
-from app.config import Config
-from app.extensions import db
-from app.models.society import Society
-from app.models.user import User
-
-
-class TestConfig(Config):
-    TESTING = True
-    SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SECRET_KEY = "test-secret-key"
-    JWT_SECRET_KEY = "test-jwt-secret-key"
-
-
-class AuthTestCase(unittest.TestCase):
-    """Test suite for Registration, Login, Logout, and Password Reset APIs."""
-
-    def setUp(self):
-        """Set up test app, database, and client before each test."""
-        self.app = create_app(TestConfig)
-        self.app_context = self.app.app_context()
-        self.app_context.push()
-        self.client = self.app.test_client()
-
-        db.create_all()
-
-        # Create sample society
-        admin = User(
-            society_id=1,
-            full_name="Society Admin",
-            email="admin@society.com",
-            password_hash="hashed_admin_password",
-            phone_number="9999999999",
-            role="admin",
-            is_learner=False,
-            is_mentor=False,
-        )
-        db.session.add(admin)
-        db.session.flush()
-
-        society = Society(
-            society_name="Green Palms Society",
-            address="456 Palm Avenue",
-            city="Mumbai",
-            state="Maharashtra",
-            pincode="400001",
-            admin_id=admin.user_id,
-        )
-        db.session.add(society)
-        db.session.commit()
-
-        admin.society_id = society.society_id
-        db.session.commit()
-
-        self.sample_society_id = society.society_id
-
-    def tearDown(self):
-        """Tear down database session and context after each test."""
-        db.session.remove()
-        db.drop_all()
-        self.app_context.pop()
+class TestAuthAPI:
+    """Test suite for Registration, Login, Logout, and Password Reset APIs using pytest."""
 
     # --- Learner Registration Tests (NSEP-8) ---
-
-    def test_register_learner_success(self):
+    def test_register_learner_success(self, client, database, sample_society):
         """Test successful learner registration returns 201 Created and hashes password."""
+        # Arrange
         payload = {
             "full_name": "John Learner",
             "email": "john.learner@example.com",
             "password": "SecurePassword123!",
             "phone_number": "9876543210",
-            "society_id": self.sample_society_id,
+            "society_id": sample_society.society_id,
         }
 
-        response = self.client.post("/api/auth/register", json=payload)
-        self.assertEqual(response.status_code, 201)
-
+        # Act
+        response = client.post("/api/auth/register", json=payload)
         data = response.get_json()
-        self.assertEqual(data["status"], "success")
-        self.assertEqual(data["message"], "Learner registered successfully")
-        self.assertEqual(data["data"]["email"], "john.learner@example.com")
-        self.assertEqual(data["data"]["full_name"], "John Learner")
-        self.assertEqual(data["data"]["phone_number"], "9876543210")
-        self.assertEqual(data["data"]["society_id"], self.sample_society_id)
-        self.assertTrue(data["data"]["is_learner"])
-        self.assertFalse(data["data"]["is_mentor"])
+
+        # Assert
+        assert response.status_code == 201
+        assert data["status"] == "success"
+        assert data["message"] == "Learner registered successfully"
+        assert data["data"]["email"] == "john.learner@example.com"
+        assert data["data"]["full_name"] == "John Learner"
+        assert data["data"]["phone_number"] == "9876543210"
+        assert data["data"]["society_id"] == sample_society.society_id
+        assert data["data"]["is_learner"] is True
+        assert data["data"]["is_mentor"] is False
 
         user = User.query.filter_by(email="john.learner@example.com").first()
-        self.assertIsNotNone(user)
-        self.assertNotEqual(user.password_hash, "SecurePassword123!")
-        self.assertTrue(check_password_hash(user.password_hash, "SecurePassword123!"))
+        assert user is not None
+        assert user.password_hash != "SecurePassword123!"
+        assert check_password_hash(user.password_hash, "SecurePassword123!")
 
-    def test_register_learner_missing_fields(self):
+    def test_register_learner_missing_fields(self, client):
         """Test registration with missing fields returns 400 Bad Request."""
+        # Arrange
         payload = {
             "full_name": "Incomplete User",
             "email": "incomplete@example.com",
         }
 
-        response = self.client.post("/api/auth/register", json=payload)
-        self.assertEqual(response.status_code, 400)
-
+        # Act
+        response = client.post("/api/auth/register", json=payload)
         data = response.get_json()
-        self.assertEqual(data["status"], "error")
-        self.assertIn("Missing or invalid required fields", data["message"])
 
-    def test_register_learner_invalid_society(self):
+        # Assert
+        assert response.status_code == 400
+        assert data["status"] == "error"
+        assert "Missing or invalid required fields" in data["message"]
+
+    def test_register_learner_invalid_society(self, client, database):
         """Test registration with non-existent society_id returns 400 Bad Request."""
+        # Arrange
         payload = {
             "full_name": "Jane Learner",
             "email": "jane.learner@example.com",
@@ -120,357 +67,304 @@ class AuthTestCase(unittest.TestCase):
             "society_id": 99999,
         }
 
-        response = self.client.post("/api/auth/register", json=payload)
-        self.assertEqual(response.status_code, 400)
-
+        # Act
+        response = client.post("/api/auth/register", json=payload)
         data = response.get_json()
-        self.assertEqual(data["status"], "error")
-        self.assertIn("does not exist", data["message"])
 
-    def test_register_learner_duplicate_email(self):
+        # Assert
+        assert response.status_code == 400
+        assert data["status"] == "error"
+        assert "does not exist" in data["message"]
+
+    def test_register_learner_duplicate_email(self, client, sample_learner, sample_society):
         """Test registration with duplicate email returns 409 Conflict."""
-        payload = {
-            "full_name": "Learner One",
-            "email": "duplicate.email@example.com",
-            "password": "Password123!",
-            "phone_number": "9876543212",
-            "society_id": self.sample_society_id,
-        }
-
-        self.client.post("/api/auth/register", json=payload)
-
+        # Arrange
         payload_dup = {
             "full_name": "Learner Two",
-            "email": "duplicate.email@example.com",
+            "email": sample_learner.email, # Duplicate email
             "password": "Password456!",
             "phone_number": "9876543213",
-            "society_id": self.sample_society_id,
+            "society_id": sample_society.society_id,
         }
-        response = self.client.post("/api/auth/register", json=payload_dup)
-        self.assertEqual(response.status_code, 409)
-
+        
+        # Act
+        response = client.post("/api/auth/register", json=payload_dup)
         data = response.get_json()
-        self.assertEqual(data["status"], "error")
-        self.assertIn("email address already exists", data["message"])
 
-    def test_register_learner_duplicate_phone(self):
+        # Assert
+        assert response.status_code == 409
+        assert data["status"] == "error"
+        assert "email address already exists" in data["message"]
+
+    def test_register_learner_duplicate_phone(self, client, sample_learner, sample_society):
         """Test registration with duplicate phone number returns 409 Conflict."""
-        payload = {
-            "full_name": "Learner One",
-            "email": "user1@example.com",
-            "password": "Password123!",
-            "phone_number": "9800000000",
-            "society_id": self.sample_society_id,
-        }
-
-        self.client.post("/api/auth/register", json=payload)
-
+        # Arrange
         payload_dup = {
             "full_name": "Learner Two",
             "email": "user2@example.com",
             "password": "Password456!",
-            "phone_number": "9800000000",
-            "society_id": self.sample_society_id,
+            "phone_number": sample_learner.phone_number, # Duplicate phone
+            "society_id": sample_society.society_id,
         }
-        response = self.client.post("/api/auth/register", json=payload_dup)
-        self.assertEqual(response.status_code, 409)
-
+        
+        # Act
+        response = client.post("/api/auth/register", json=payload_dup)
         data = response.get_json()
-        self.assertEqual(data["status"], "error")
-        self.assertIn("phone number already exists", data["message"])
+
+        # Assert
+        assert response.status_code == 409
+        assert data["status"] == "error"
+        assert "phone number already exists" in data["message"]
 
     # --- Mentor Registration Tests (NSEP-9) ---
-
-    def test_register_mentor_success(self):
+    def test_register_mentor_success(self, client, sample_society):
         """Test successful mentor registration returns 201 Created and sets is_mentor=True."""
+        # Arrange
         payload = {
             "full_name": "Mary Mentor",
-            "email": "mary.mentor@example.com",
+            "email": "mary.mentor.test@example.com",
             "password": "MentorPassword123!",
             "phone_number": "9876543220",
-            "society_id": self.sample_society_id,
+            "society_id": sample_society.society_id,
         }
 
-        response = self.client.post("/api/auth/register/mentor", json=payload)
-        self.assertEqual(response.status_code, 201)
-
+        # Act
+        response = client.post("/api/auth/register/mentor", json=payload)
         data = response.get_json()
-        self.assertEqual(data["status"], "success")
-        self.assertEqual(data["message"], "Mentor registered successfully")
-        self.assertFalse(data["data"]["is_learner"])
-        self.assertTrue(data["data"]["is_mentor"])
+
+        # Assert
+        assert response.status_code == 201
+        assert data["status"] == "success"
+        assert data["message"] == "Mentor registered successfully"
+        assert data["data"]["is_learner"] is False
+        assert data["data"]["is_mentor"] is True
 
     # --- Login Tests (NSEP-10) ---
-
-    def test_login_success(self):
+    def test_login_success(self, client, sample_learner):
         """Test successful user login returns 200 OK, JWT access token, and user info."""
-        reg_payload = {
-            "full_name": "Login User",
-            "email": "login.user@example.com",
-            "password": "SecretPassword123!",
-            "phone_number": "9876543230",
-            "society_id": self.sample_society_id,
-        }
-        self.client.post("/api/auth/register", json=reg_payload)
-
+        # Arrange
         login_payload = {
-            "email": "login.user@example.com",
-            "password": "SecretPassword123!",
+            "email": sample_learner.email,
+            "password": "password123", # From fixture
         }
 
-        response = self.client.post("/api/auth/login", json=login_payload)
-        self.assertEqual(response.status_code, 200)
-
+        # Act
+        response = client.post("/api/auth/login", json=login_payload)
         data = response.get_json()
-        self.assertEqual(data["status"], "success")
-        self.assertEqual(data["message"], "Login successful")
-        self.assertIn("access_token", data)
-        self.assertTrue(len(data["access_token"]) > 0)
-        self.assertEqual(data["data"]["email"], "login.user@example.com")
 
-    def test_login_missing_email(self):
+        # Assert
+        assert response.status_code == 200
+        assert data["status"] == "success"
+        assert data["message"] == "Login successful"
+        assert "access_token" in data
+        assert len(data["access_token"]) > 0
+        assert data["data"]["email"] == sample_learner.email
+
+    def test_login_missing_email(self, client):
         """Test login with missing email returns 400 Bad Request."""
+        # Arrange
         login_payload = {"password": "SecretPassword123!"}
-        response = self.client.post("/api/auth/login", json=login_payload)
-        self.assertEqual(response.status_code, 400)
-
+        
+        # Act
+        response = client.post("/api/auth/login", json=login_payload)
         data = response.get_json()
-        self.assertEqual(data["status"], "error")
-        self.assertIn("Missing or invalid required fields", data["message"])
 
-    def test_login_missing_password(self):
+        # Assert
+        assert response.status_code == 400
+        assert data["status"] == "error"
+        assert "Missing or invalid required fields" in data["message"]
+
+    def test_login_missing_password(self, client):
         """Test login with missing password returns 400 Bad Request."""
+        # Arrange
         login_payload = {"email": "login.user@example.com"}
-        response = self.client.post("/api/auth/login", json=login_payload)
-        self.assertEqual(response.status_code, 400)
-
+        
+        # Act
+        response = client.post("/api/auth/login", json=login_payload)
         data = response.get_json()
-        self.assertEqual(data["status"], "error")
-        self.assertIn("Missing or invalid required fields", data["message"])
 
-    def test_login_invalid_email(self):
+        # Assert
+        assert response.status_code == 400
+        assert data["status"] == "error"
+        assert "Missing or invalid required fields" in data["message"]
+
+    def test_login_invalid_email(self, client, database):
         """Test login with non-existent email returns 401 Unauthorized."""
+        # Arrange
         login_payload = {
             "email": "nonexistent@example.com",
             "password": "SomePassword123!",
         }
-        response = self.client.post("/api/auth/login", json=login_payload)
-        self.assertEqual(response.status_code, 401)
-
+        
+        # Act
+        response = client.post("/api/auth/login", json=login_payload)
         data = response.get_json()
-        self.assertEqual(data["status"], "error")
-        self.assertEqual(data["message"], "Invalid email or password.")
 
-    def test_login_invalid_password(self):
+        # Assert
+        assert response.status_code == 401
+        assert data["status"] == "error"
+        assert data["message"] == "Invalid email or password."
+
+    def test_login_invalid_password(self, client, sample_learner):
         """Test login with incorrect password returns 401 Unauthorized."""
-        reg_payload = {
-            "full_name": "Login User",
-            "email": "login.user2@example.com",
-            "password": "CorrectPassword123!",
-            "phone_number": "9876543231",
-            "society_id": self.sample_society_id,
-        }
-        self.client.post("/api/auth/register", json=reg_payload)
-
+        # Arrange
         login_payload = {
-            "email": "login.user2@example.com",
+            "email": sample_learner.email,
             "password": "WrongPassword123!",
         }
-        response = self.client.post("/api/auth/login", json=login_payload)
-        self.assertEqual(response.status_code, 401)
-
+        
+        # Act
+        response = client.post("/api/auth/login", json=login_payload)
         data = response.get_json()
-        self.assertEqual(data["status"], "error")
-        self.assertEqual(data["message"], "Invalid email or password.")
+
+        # Assert
+        assert response.status_code == 401
+        assert data["status"] == "error"
+        assert data["message"] == "Invalid email or password."
 
     # --- Logout Tests (NSEP-11) ---
-
-    def test_logout_success(self):
+    def test_logout_success(self, client, auth_learner):
         """Test successful logout revokes JWT token and returns 200 OK."""
-        reg_payload = {
-            "full_name": "Logout User",
-            "email": "logout.user@example.com",
-            "password": "SecretPassword123!",
-            "phone_number": "9876543240",
-            "society_id": self.sample_society_id,
-        }
-        self.client.post("/api/auth/register", json=reg_payload)
-
-        login_res = self.client.post(
-            "/api/auth/login",
-            json={"email": "logout.user@example.com", "password": "SecretPassword123!"},
-        )
-        token = login_res.get_json()["access_token"]
-
-        headers = {"Authorization": f"Bearer {token}"}
-        response = self.client.post("/api/auth/logout", headers=headers)
-        self.assertEqual(response.status_code, 200)
-
+        # Act
+        response = client.post("/api/auth/logout", headers=auth_learner["headers"])
         data = response.get_json()
-        self.assertEqual(data["status"], "success")
-        self.assertEqual(data["message"], "Successfully logged out")
 
-    def test_logout_token_revoked(self):
+        # Assert
+        assert response.status_code == 200
+        assert data["status"] == "success"
+        assert data["message"] == "Successfully logged out"
+
+    def test_logout_token_revoked(self, client, auth_learner):
         """Test reusing a revoked token after logout returns 401 Unauthorized."""
-        reg_payload = {
-            "full_name": "Revoke User",
-            "email": "revoke.user@example.com",
-            "password": "SecretPassword123!",
-            "phone_number": "9876543241",
-            "society_id": self.sample_society_id,
-        }
-        self.client.post("/api/auth/register", json=reg_payload)
-
-        login_res = self.client.post(
-            "/api/auth/login",
-            json={"email": "revoke.user@example.com", "password": "SecretPassword123!"},
-        )
-        token = login_res.get_json()["access_token"]
-        headers = {"Authorization": f"Bearer {token}"}
-
+        # Arrange
         # First logout call succeeds
-        logout_res = self.client.post("/api/auth/logout", headers=headers)
-        self.assertEqual(logout_res.status_code, 200)
+        logout_res = client.post("/api/auth/logout", headers=auth_learner["headers"])
+        assert logout_res.status_code == 200
 
+        # Act
         # Second call using the revoked token fails with 401
-        response = self.client.post("/api/auth/logout", headers=headers)
-        self.assertEqual(response.status_code, 401)
+        response = client.post("/api/auth/logout", headers=auth_learner["headers"])
 
-    def test_logout_missing_token(self):
+        # Assert
+        assert response.status_code == 401
+
+    def test_logout_missing_token(self, client):
         """Test logout without Authorization header returns 401 Unauthorized."""
-        response = self.client.post("/api/auth/logout")
-        self.assertEqual(response.status_code, 401)
+        # Act
+        response = client.post("/api/auth/logout")
+        
+        # Assert
+        assert response.status_code == 401
 
     # --- Forgot Password & Reset Password Tests (NSEP-12) ---
-
-    def test_forgot_password_existing_email(self):
+    def test_forgot_password_existing_email(self, client, sample_learner):
         """Test requesting password reset for registered email returns 200 OK."""
-        reg_payload = {
-            "full_name": "Forgot User",
-            "email": "forgot.user@example.com",
-            "password": "Password123!",
-            "phone_number": "9876543250",
-            "society_id": self.sample_society_id,
-        }
-        self.client.post("/api/auth/register", json=reg_payload)
-
-        response = self.client.post(
-            "/api/auth/forgot-password", json={"email": "forgot.user@example.com"}
+        # Act
+        response = client.post(
+            "/api/auth/forgot-password", json={"email": sample_learner.email}
         )
-        self.assertEqual(response.status_code, 200)
-
         data = response.get_json()
-        self.assertEqual(data["status"], "success")
-        self.assertIn("password reset link has been sent", data["message"])
 
-    def test_forgot_password_nonexistent_email(self):
+        # Assert
+        assert response.status_code == 200
+        assert data["status"] == "success"
+        assert "password reset link has been sent" in data["message"]
+
+    def test_forgot_password_nonexistent_email(self, client, database):
         """Test requesting password reset for unregistered email returns identical 200 OK (anti-enumeration)."""
-        response = self.client.post(
+        # Act
+        response = client.post(
             "/api/auth/forgot-password", json={"email": "nonexistent.email@example.com"}
         )
-        self.assertEqual(response.status_code, 200)
-
         data = response.get_json()
-        self.assertEqual(data["status"], "success")
-        self.assertIn("password reset link has been sent", data["message"])
 
-    def test_forgot_password_missing_email(self):
+        # Assert
+        assert response.status_code == 200
+        assert data["status"] == "success"
+        assert "password reset link has been sent" in data["message"]
+
+    def test_forgot_password_missing_email(self, client):
         """Test requesting password reset without email returns 400 Bad Request."""
-        response = self.client.post("/api/auth/forgot-password", json={})
-        self.assertEqual(response.status_code, 400)
-
+        # Act
+        response = client.post("/api/auth/forgot-password", json={})
         data = response.get_json()
-        self.assertEqual(data["status"], "error")
-        self.assertIn("Missing or invalid required fields", data["message"])
 
-    def test_reset_password_success(self):
+        # Assert
+        assert response.status_code == 400
+        assert data["status"] == "error"
+        assert "Missing or invalid required fields" in data["message"]
+
+    def test_reset_password_success(self, client, sample_learner):
         """Test resetting password with a valid token updates user password and allows login."""
-        reg_payload = {
-            "full_name": "Reset User",
-            "email": "reset.user@example.com",
-            "password": "OldPassword123!",
-            "phone_number": "9876543251",
-            "society_id": self.sample_society_id,
-        }
-        self.client.post("/api/auth/register", json=reg_payload)
-
-        user = User.query.filter_by(email="reset.user@example.com").first()
-
+        # Arrange
         reset_token = create_access_token(
-            identity=str(user.user_id),
+            identity=str(sample_learner.user_id),
             expires_delta=timedelta(minutes=15),
             additional_claims={"type": "reset_password"},
         )
-
         reset_payload = {
             "token": reset_token,
             "new_password": "NewSecurePassword456!",
         }
 
-        response = self.client.post("/api/auth/reset-password", json=reset_payload)
-        self.assertEqual(response.status_code, 200)
-
+        # Act
+        response = client.post("/api/auth/reset-password", json=reset_payload)
         data = response.get_json()
-        self.assertEqual(data["status"], "success")
-        self.assertIn("Password reset successfully", data["message"])
+
+        # Assert
+        assert response.status_code == 200
+        assert data["status"] == "success"
+        assert "Password reset successfully" in data["message"]
 
         # Verify user can log in with new password
-        login_res = self.client.post(
+        login_res = client.post(
             "/api/auth/login",
             json={
-                "email": "reset.user@example.com",
+                "email": sample_learner.email,
                 "password": "NewSecurePassword456!",
             },
         )
-        self.assertEqual(login_res.status_code, 200)
+        assert login_res.status_code == 200
 
-    def test_reset_password_invalid_token(self):
+    def test_reset_password_invalid_token(self, client):
         """Test resetting password with an invalid token returns 400 Bad Request."""
+        # Arrange
         reset_payload = {
             "token": "invalid.jwt.token",
             "new_password": "NewPassword123!",
         }
-        response = self.client.post("/api/auth/reset-password", json=reset_payload)
-        self.assertEqual(response.status_code, 400)
-
+        
+        # Act
+        response = client.post("/api/auth/reset-password", json=reset_payload)
         data = response.get_json()
-        self.assertEqual(data["status"], "error")
-        self.assertIn("Invalid or expired password reset token", data["message"])
 
-    def test_reset_password_token_replay(self):
+        # Assert
+        assert response.status_code == 400
+        assert data["status"] == "error"
+        assert "Invalid or expired password reset token" in data["message"]
+
+    def test_reset_password_token_replay(self, client, sample_learner):
         """Test attempting to reuse a password reset token returns 400 Bad Request."""
-        reg_payload = {
-            "full_name": "Replay User",
-            "email": "replay.user@example.com",
-            "password": "OldPassword123!",
-            "phone_number": "9876543252",
-            "society_id": self.sample_society_id,
-        }
-        self.client.post("/api/auth/register", json=reg_payload)
-        user = User.query.filter_by(email="replay.user@example.com").first()
-
+        # Arrange
         reset_token = create_access_token(
-            identity=str(user.user_id),
+            identity=str(sample_learner.user_id),
             expires_delta=timedelta(minutes=15),
             additional_claims={"type": "reset_password"},
         )
-
         reset_payload = {
             "token": reset_token,
             "new_password": "NewSecurePassword456!",
         }
 
         # First reset succeeds
-        self.client.post("/api/auth/reset-password", json=reset_payload)
+        client.post("/api/auth/reset-password", json=reset_payload)
 
+        # Act
         # Second reset with same token fails
-        response = self.client.post("/api/auth/reset-password", json=reset_payload)
-        self.assertEqual(response.status_code, 400)
-
+        response = client.post("/api/auth/reset-password", json=reset_payload)
         data = response.get_json()
-        self.assertEqual(data["status"], "error")
-        self.assertIn("already been used or revoked", data["message"])
 
-
-if __name__ == "__main__":
-    unittest.main()
+        # Assert
+        assert response.status_code == 400
+        assert data["status"] == "error"
+        assert "already been used or revoked" in data["message"]
