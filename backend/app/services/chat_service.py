@@ -5,6 +5,11 @@ from app.models.message import Message
 from app.models.user import User
 from sqlalchemy import and_, or_
 
+from app.services.notification_service import (
+    create_notification_service,
+    NOTIFICATION_TYPE_MESSAGE,
+)
+
 
 class ValidationError(Exception):
     """Raised when message validation fails."""
@@ -94,6 +99,13 @@ def send_message_service(data):
 
     db.session.add(message_obj)
     db.session.commit()
+
+    create_notification_service(
+        user_id=receiver.user_id,
+        title="New Message",
+        message=f"You received a new message from {sender.full_name}.",
+        notification_type=NOTIFICATION_TYPE_MESSAGE,
+    )
 
     return message_obj
 
