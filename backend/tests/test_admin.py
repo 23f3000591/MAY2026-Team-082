@@ -1436,3 +1436,206 @@ class TestAdmin:
         data = response.get_json()
 
         assert "already resolved" in data["message"].lower()
+
+    def test_resolve_report_with_admin_description(
+        self,
+        client,
+        auth_admin,
+        database,
+        sample_learner,
+        sample_mentor,
+    ):
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            status="Pending",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        admin_description = (
+            "Reviewed the complaint and confirmed a violation "
+            "of community guidelines."
+        )
+
+        response = client.patch(
+            f"/api/admin/reports/{report.report_id}/resolve",
+            headers=auth_admin["headers"],
+            json={"description": admin_description},
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert data["data"]["report_id"] == report.report_id
+        assert data["data"]["status"] == "Resolved"
+        assert data["data"]["description"] == admin_description
+
+        database.session.refresh(report)
+
+        assert report.status == "Resolved"
+        assert report.description == admin_description
+        assert report.resolved_by == auth_admin["user"].user_id
+        assert report.resolved_at is not None
+
+    def test_dismiss_report_with_admin_description(
+        self,
+        client,
+        auth_admin,
+        database,
+        sample_learner,
+        sample_mentor,
+    ):
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            status="Pending",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        admin_description = (
+            "Reviewed the complaint and found insufficient evidence "
+            "of a community guideline violation."
+        )
+
+        response = client.patch(
+            f"/api/admin/reports/{report.report_id}/dismiss",
+            headers=auth_admin["headers"],
+            json={"description": admin_description},
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert data["data"]["report_id"] == report.report_id
+        assert data["data"]["status"] == "Dismissed"
+        assert data["data"]["description"] == admin_description
+
+        database.session.refresh(report)
+
+        assert report.status == "Dismissed"
+        assert report.description == admin_description
+        assert report.resolved_by == auth_admin["user"].user_id
+        assert report.resolved_at is not None
+
+    def test_resolve_report_with_empty_admin_description(
+        self,
+        client,
+        auth_admin,
+        database,
+        sample_learner,
+        sample_mentor,
+    ):
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            description="Old report description",
+            status="Pending",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        response = client.patch(
+            f"/api/admin/reports/{report.report_id}/resolve",
+            headers=auth_admin["headers"],
+            json={"description": ""},
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert data["data"]["status"] == "Resolved"
+        assert data["data"]["description"] is None
+
+        database.session.refresh(report)
+
+        assert report.status == "Resolved"
+        assert report.description is None
+
+    def test_dismiss_report_with_empty_admin_description(
+        self,
+        client,
+        auth_admin,
+        database,
+        sample_learner,
+        sample_mentor,
+    ):
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            description="Old report description",
+            status="Pending",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        response = client.patch(
+            f"/api/admin/reports/{report.report_id}/dismiss",
+            headers=auth_admin["headers"],
+            json={"description": ""},
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert data["data"]["status"] == "Dismissed"
+        assert data["data"]["description"] is None
+
+        database.session.refresh(report)
+
+        assert report.status == "Dismissed"
+        assert report.description is None
+
+    def test_resolve_report_invalid_description_type(
+        self,
+        client,
+        auth_admin,
+        database,
+        sample_learner,
+        sample_mentor,
+    ):
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            status="Pending",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        response = client.patch(
+            f"/api/admin/reports/{report.report_id}/resolve",
+            headers=auth_admin["headers"],
+            json={"description": 12345},
+        )
+
+        assert response.status_code == 400
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert data["message"] == "description must be a string."
+
+        database.session.refresh(report)
+
+        assert report.status == "Pending"
+        assert report.resolved_by is None
+        assert report.resolved_at is None

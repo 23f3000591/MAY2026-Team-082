@@ -344,9 +344,9 @@ def get_report_details_service(report_id):
     return report
 
 
-def resolve_report_service(report_id):
+def resolve_report_service(report_id, data=None):
     """
-    Resolves a pending report.
+    Resolves a pending report and optionally stores an admin remark.
     """
 
     admin_id = int(get_jwt_identity())
@@ -372,6 +372,17 @@ def resolve_report_service(report_id):
     if report.status != "Pending":
         raise ValidationError(f"Report is already {report.status.lower()}.")
 
+    if data is not None and not isinstance(data, dict):
+        raise ValidationError("Request body must be a valid JSON object.")
+
+    if data and "description" in data:
+        description = data.get("description")
+
+        if description is not None and not isinstance(description, str):
+            raise ValidationError("description must be a string.")
+
+        report.description = description.strip() if description else None
+
     report.status = "Resolved"
     report.resolved_by = admin.user_id
     report.resolved_at = datetime.utcnow()
@@ -388,9 +399,9 @@ def resolve_report_service(report_id):
     return report
 
 
-def dismiss_report_service(report_id):
+def dismiss_report_service(report_id, data=None):
     """
-    Dismisses a pending report.
+    Dismisses a pending report and optionally stores an admin remark.
     """
 
     admin_id = int(get_jwt_identity())
@@ -415,6 +426,17 @@ def dismiss_report_service(report_id):
 
     if report.status != "Pending":
         raise ValidationError(f"Report is already {report.status.lower()}.")
+
+    if data is not None and not isinstance(data, dict):
+        raise ValidationError("Request body must be a valid JSON object.")
+
+    if data and "description" in data:
+        description = data.get("description")
+
+        if description is not None and not isinstance(description, str):
+            raise ValidationError("description must be a string.")
+
+        report.description = description.strip() if description else None
 
     report.status = "Dismissed"
     report.resolved_by = admin.user_id

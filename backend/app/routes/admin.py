@@ -496,11 +496,12 @@ def resolve_report(report_id):
     """
     PATCH /api/admin/reports/<report_id>/resolve
 
-    Resolves a pending report.
+    Resolves a pending report with an optional admin remark.
     """
 
     try:
-        report = resolve_report_service(report_id)
+        data = request.get_json(silent=True)
+        report = resolve_report_service(report_id, data)
 
         return (
             jsonify(
@@ -510,6 +511,7 @@ def resolve_report(report_id):
                     "data": {
                         "report_id": report.report_id,
                         "status": report.status,
+                        "description": report.description,
                         "resolved_by": report.resolved_by,
                         "resolved_at": report.resolved_at.isoformat(),
                     },
@@ -571,11 +573,12 @@ def dismiss_report(report_id):
     """
     PATCH /api/admin/reports/<report_id>/dismiss
 
-    Dismisses a pending report.
+    Dismisses a pending report with an optional admin remark.
     """
 
     try:
-        report = dismiss_report_service(report_id)
+        data = request.get_json(silent=True)
+        report = dismiss_report_service(report_id, data)
 
         return (
             jsonify(
@@ -585,6 +588,7 @@ def dismiss_report(report_id):
                     "data": {
                         "report_id": report.report_id,
                         "status": report.status,
+                        "description": report.description,
                         "resolved_by": report.resolved_by,
                         "resolved_at": report.resolved_at.isoformat(),
                     },
