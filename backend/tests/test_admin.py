@@ -1,5 +1,6 @@
 import pytest
 from app.models.report import Report
+from app.models.session import Session
 
 
 class TestAdmin:
@@ -1639,3 +1640,136 @@ class TestAdmin:
         assert report.status == "Pending"
         assert report.resolved_by is None
         assert report.resolved_at is None
+
+    def test_get_platform_activity_success(
+        self,
+        client,
+        auth_admin,
+    ):
+        response = client.get(
+            "/api/admin/activity",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+
+        assert "users" in data["data"]
+        assert "sessions" in data["data"]
+        assert "reports" in data["data"]
+        assert "recent_activity" in data["data"]
+
+        assert "total" in data["data"]["users"]
+        assert "mentors" in data["data"]["users"]
+        assert "learners" in data["data"]["users"]
+        assert "mentor_learner_users" in data["data"]["users"]
+        assert "verified_mentors" in data["data"]["users"]
+        assert "pending_mentor_verification" in data["data"]["users"]
+        assert "suspended_users" in data["data"]["users"]
+
+        assert "total" in data["data"]["sessions"]
+        assert "pending" in data["data"]["sessions"]
+        assert "accepted" in data["data"]["sessions"]
+        assert "rejected" in data["data"]["sessions"]
+        assert "completed" in data["data"]["sessions"]
+        assert "cancelled" in data["data"]["sessions"]
+
+        assert "total" in data["data"]["reports"]
+        assert "pending" in data["data"]["reports"]
+        assert "resolved" in data["data"]["reports"]
+        assert "dismissed" in data["data"]["reports"]
+
+        assert isinstance(data["data"]["recent_activity"], list)
+        assert len(data["data"]["recent_activity"]) <= 10
+
+    def test_get_platform_activity_user_statistics(
+        self,
+        client,
+        auth_admin,
+        database,
+        sample_mentor,
+        sample_learner,
+    ):
+        sample_mentor.is_mentor = True
+        sample_mentor.is_learner = True
+        sample_mentor.is_verified = True
+
+        sample_learner.is_mentor = False
+        sample_learner.is_learner = True
+
+        database.session.commit()
+
+        response = client.get(
+            "/api/admin/activity",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 200
+
+        users = response.get_json()["data"]["users"]
+
+        assert users["total"] >= 3
+        assert users["mentors"] >= 1
+        assert users["learners"] >= 2
+        assert users["mentor_learner_users"] >= 1
+        assert users["verified_mentors"] >= 1
+
+    def test_get_platform_activity_session_and_report_statistics(
+        self,
+        client,
+        auth_admin,
+        database,
+        sample_session,
+        sample_learner,
+        sample_mentor,
+    ):
+        sample_session.status = "Completed"
+
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            status="Pending",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        response = client.get(
+            "/api/admin/activity",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()["data"]
+
+        sessions = data["sessions"]
+
+        assert sessions["total"] >= 1
+        assert sessions["completed"] >= 1
+
+        reports = data["reports"]
+
+        assert reports["total"] >= 1
+        assert reports["pending"] >= 1
+
+    def test_get_platform_activity_non_admin(
+        self,
+        client,
+        auth_learner,
+    ):
+        response = client.get(
+            "/api/admin/activity",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 403
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert data["message"] == ("Only administrators can monitor platform activity.")

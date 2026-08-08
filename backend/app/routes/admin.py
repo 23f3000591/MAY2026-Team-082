@@ -13,6 +13,7 @@ from app.services.admin_service import (
     get_report_details_service,
     resolve_report_service,
     dismiss_report_service,
+    get_platform_activity_service,
 )
 
 admin_bp = Blueprint(
@@ -632,6 +633,78 @@ def dismiss_report(report_id):
 
     except Exception as err:
         current_app.logger.exception(f"Unexpected error in dismiss_report: {str(err)}")
+
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "An unexpected error occurred.",
+                }
+            ),
+            500,
+        )
+
+
+@admin_bp.route("/activity", methods=["GET"])
+@jwt_required()
+def get_platform_activity():
+    """
+    GET /api/admin/activity
+
+    Returns platform statistics and recent meaningful activity
+    for the admin dashboard.
+    """
+
+    try:
+        activity = get_platform_activity_service()
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "data": activity,
+                }
+            ),
+            200,
+        )
+
+    except ValidationError as err:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": err.message,
+                }
+            ),
+            400,
+        )
+
+    except ResourceNotFoundError as err:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": err.message,
+                }
+            ),
+            404,
+        )
+
+    except AuthorizationError as err:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": err.message,
+                }
+            ),
+            403,
+        )
+
+    except Exception as err:
+        current_app.logger.exception(
+            f"Unexpected error in get_platform_activity: {str(err)}"
+        )
 
         return (
             jsonify(

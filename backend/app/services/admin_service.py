@@ -4,6 +4,7 @@ from app.extensions import db
 from app.models.user import User
 from app.models.report import Report
 from datetime import datetime
+from app.models.session import Session
 from app.services.notification_service import (
     create_notification_service,
     NOTIFICATION_TYPE_ADMIN,
@@ -452,3 +453,145 @@ def dismiss_report_service(report_id, data=None):
     )
 
     return report
+
+
+def get_platform_activity_service():
+    """
+    Returns platform statistics and recent meaningful administrative activity.
+    """
+
+    admin_id = int(get_jwt_identity())
+
+    admin = db.session.get(User, admin_id)
+
+    if not admin:
+        raise ResourceNotFoundError("Admin not found.")
+
+    if admin.role != "admin":
+        raise AuthorizationError("Only administrators can monitor platform activity.")
+
+    total_users = User.query.count()
+
+    total_mentors = User.query.filter(User.is_mentor.is_(True)).count()
+
+    total_learners = User.query.filter(User.is_learner.is_(True)).count()
+
+    mentor_learner_users = User.query.filter(
+        User.is_mentor.is_(True),
+        User.is_learner.is_(True),
+    ).count()
+
+    verified_mentors = User.query.filter(
+        User.is_mentor.is_(True),
+        User.is_verified.is_(True),
+    ).count()
+
+    pending_mentor_verification = User.query.filter(
+        User.is_mentor.is_(True),
+        User.is_verified.is_(False),
+    ).count()
+
+    suspended_users = User.query.filter(User.is_suspended.is_(True)).count()
+
+    total_sessions = Session.query.count()
+
+    pending_sessions = Session.query.filter(Session.status == "Pending").count()
+
+    accepted_sessions = Session.query.filter(Session.status == "Accepted").count()
+
+    rejected_sessions = Session.query.filter(Session.status == "Rejected").count()
+
+    completed_sessions = Session.query.filter(Session.status == "Completed").count()
+
+    cancelled_sessions = Session.query.filter(Session.status == "Cancelled").count()
+
+    total_reports = Report.query.count()
+
+    pending_reports = Report.query.filter(Report.status == "Pending").count()
+
+    resolved_reports = Report.query.filter(Report.status == "Resolved").count()
+
+    dismissed_reports = Report.query.filter(Report.status == "Dismissed").count()
+
+    activities = []
+
+    # Recent user registrations
+    recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
+
+    for user in recent_users:
+        activities.append(
+            {
+                "type": "user_registration",
+                "message": f"New user registered: {user.full_name}.",
+                "created_at": user.created_at,
+            }
+        )
+
+    # Recent reports raised
+    recent_reports = Report.query.order_by(Report.created_at.desc()).limit(5).all()
+
+    for report in recent_reports:
+        activities.append(
+            {
+                "type": "report_raised",
+                "message": f"New report #{report.report_id} was raised.",
+                "created_at": report.created_at,
+            }
+        )
+
+    # Recent reports resolved/dismissed
+    recent_processed_reports = (
+        Report.query.filter(Report.resolved_at.is_not(None))
+        .order_by(Report.resolved_at.desc())
+        .limit(5)
+        .all()
+    )
+
+    for report in recent_processed_reports:
+        action = report.status.lower()
+
+        activities.append(
+            {
+                "type": f"report_{action}",
+                "message": (f"Report #{report.report_id} was {action}."),
+                "created_at": report.resolved_at,
+            }
+        )
+
+    # Latest 10 events
+    activities.sort(
+        key=lambda activity: activity["created_at"],
+        reverse=True,
+    )
+
+    activities = activities[:10]
+
+    for activity in activities:
+        activity["created_at"] = activity["created_at"].isoformat()
+
+    return {
+        "users": {
+            "total": total_users,
+            "mentors": total_mentors,
+            "learners": total_learners,
+            "mentor_learner_users": mentor_learner_users,
+            "verified_mentors": verified_mentors,
+            "pending_mentor_verification": pending_mentor_verification,
+            "suspended_users": suspended_users,
+        },
+        "sessions": {
+            "total": total_sessions,
+            "pending": pending_sessions,
+            "accepted": accepted_sessions,
+            "rejected": rejected_sessions,
+            "completed": completed_sessions,
+            "cancelled": cancelled_sessions,
+        },
+        "reports": {
+            "total": total_reports,
+            "pending": pending_reports,
+            "resolved": resolved_reports,
+            "dismissed": dismissed_reports,
+        },
+        "recent_activity": activities,
+    }
