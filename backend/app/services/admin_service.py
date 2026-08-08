@@ -2,6 +2,8 @@ from flask_jwt_extended import get_jwt_identity
 
 from app.extensions import db
 from app.models.user import User
+from app.models.report import Report
+from datetime import datetime
 from app.services.notification_service import (
     create_notification_service,
     NOTIFICATION_TYPE_ADMIN,
@@ -258,3 +260,173 @@ def update_mentor_verification_service(user_id, data):
         )
 
     return mentor
+
+
+def get_reports_service(args):
+    """
+    Returns reports for admin review with optional filters.
+    """
+
+    admin_id = int(get_jwt_identity())
+
+    admin = db.session.get(User, admin_id)
+
+    if not admin:
+        raise ResourceNotFoundError("Admin not found.")
+
+    if admin.role != "admin":
+        raise AuthorizationError("Only administrators can view reports.")
+
+    query = Report.query
+
+    status = args.get("status")
+    reported_user = args.get("reported_user")
+    reported_by = args.get("reported_by")
+    reason = args.get("reason")
+
+    if status:
+        allowed_statuses = {"Pending", "Resolved", "Dismissed"}
+
+        if status not in allowed_statuses:
+            raise ValidationError("status must be Pending, Resolved, or Dismissed.")
+
+        query = query.filter(Report.status == status)
+
+    if reported_user:
+        try:
+            reported_user = int(reported_user)
+        except (ValueError, TypeError):
+            raise ValidationError("reported_user must be a valid integer.")
+
+        query = query.filter(Report.reported_user == reported_user)
+
+    if reported_by:
+        try:
+            reported_by = int(reported_by)
+        except (ValueError, TypeError):
+            raise ValidationError("reported_by must be a valid integer.")
+
+        query = query.filter(Report.reported_by == reported_by)
+
+    if reason:
+        query = query.filter(Report.reason.ilike(f"%{reason}%"))
+
+    reports = query.order_by(Report.created_at.desc()).all()
+
+    return reports
+
+
+def get_report_details_service(report_id):
+    """
+    Returns complete details of a report for admin review.
+    """
+
+    admin_id = int(get_jwt_identity())
+
+    admin = db.session.get(User, admin_id)
+
+    if not admin:
+        raise ResourceNotFoundError("Admin not found.")
+
+    if admin.role != "admin":
+        raise AuthorizationError("Only administrators can view reports.")
+
+    try:
+        report_id = int(report_id)
+    except (ValueError, TypeError):
+        raise ValidationError("report_id must be a valid integer.")
+
+    report = db.session.get(Report, report_id)
+
+    if not report:
+        raise ResourceNotFoundError("Report not found.")
+
+    return report
+
+
+def resolve_report_service(report_id):
+    """
+    Resolves a pending report.
+    """
+
+    admin_id = int(get_jwt_identity())
+
+    admin = db.session.get(User, admin_id)
+
+    if not admin:
+        raise ResourceNotFoundError("Admin not found.")
+
+    if admin.role != "admin":
+        raise AuthorizationError("Only administrators can resolve reports.")
+
+    try:
+        report_id = int(report_id)
+    except (ValueError, TypeError):
+        raise ValidationError("report_id must be a valid integer.")
+
+    report = db.session.get(Report, report_id)
+
+    if not report:
+        raise ResourceNotFoundError("Report not found.")
+
+    if report.status != "Pending":
+        raise ValidationError(f"Report is already {report.status.lower()}.")
+
+    report.status = "Resolved"
+    report.resolved_by = admin.user_id
+    report.resolved_at = datetime.utcnow()
+
+    db.session.commit()
+
+    create_notification_service(
+        user_id=report.reported_user,
+        title="Report Reviewed",
+        message="Your reported case has been reviewed and resolved by an administrator.",
+        notification_type=NOTIFICATION_TYPE_ADMIN,
+    )
+
+    return report
+
+
+def dismiss_report_service(report_id):
+    """
+    Dismisses a pending report.
+    """
+
+    admin_id = int(get_jwt_identity())
+
+    admin = db.session.get(User, admin_id)
+
+    if not admin:
+        raise ResourceNotFoundError("Admin not found.")
+
+    if admin.role != "admin":
+        raise AuthorizationError("Only administrators can dismiss reports.")
+
+    try:
+        report_id = int(report_id)
+    except (ValueError, TypeError):
+        raise ValidationError("report_id must be a valid integer.")
+
+    report = db.session.get(Report, report_id)
+
+    if not report:
+        raise ResourceNotFoundError("Report not found.")
+
+    if report.status != "Pending":
+        raise ValidationError(f"Report is already {report.status.lower()}.")
+
+    report.status = "Dismissed"
+    report.resolved_by = admin.user_id
+    report.resolved_at = datetime.utcnow()
+
+    db.session.commit()
+
+    create_notification_service(
+        user_id=report.reported_user,
+        title="Report Dismissed",
+        message="Your reported case has been reviewed and dismissed by an administrator.",
+        notification_type=NOTIFICATION_TYPE_ADMIN,
+    )
+
+    return report

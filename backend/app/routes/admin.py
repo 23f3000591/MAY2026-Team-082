@@ -9,6 +9,10 @@ from app.services.admin_service import (
     update_mentor_verification_service,
     get_users_service,
     get_user_details_service,
+    get_reports_service,
+    get_report_details_service,
+    resolve_report_service,
+    dismiss_report_service,
 )
 
 admin_bp = Blueprint(
@@ -310,6 +314,320 @@ def update_mentor_verification(user_id):
         current_app.logger.exception(
             f"Unexpected error in update_mentor_verification: {str(err)}"
         )
+
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "An unexpected error occurred.",
+                }
+            ),
+            500,
+        )
+
+
+@admin_bp.route("/reports", methods=["GET"])
+@jwt_required()
+def get_reports():
+    """
+    GET /api/admin/reports
+
+    Returns reports for admin review.
+    """
+
+    try:
+        reports = get_reports_service(request.args)
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "data": [
+                        {
+                            "report_id": report.report_id,
+                            "reported_by": report.reported_by,
+                            "reported_user": report.reported_user,
+                            "reason": report.reason,
+                            "status": report.status,
+                            "created_at": report.created_at.isoformat(),
+                        }
+                        for report in reports
+                    ],
+                }
+            ),
+            200,
+        )
+
+    except ValidationError as err:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": err.message,
+                }
+            ),
+            400,
+        )
+
+    except ResourceNotFoundError as err:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": err.message,
+                }
+            ),
+            404,
+        )
+
+    except AuthorizationError as err:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": err.message,
+                }
+            ),
+            403,
+        )
+
+    except Exception as err:
+        current_app.logger.exception(f"Unexpected error in get_reports: {str(err)}")
+
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "An unexpected error occurred.",
+                }
+            ),
+            500,
+        )
+
+
+@admin_bp.route("/reports/<int:report_id>", methods=["GET"])
+@jwt_required()
+def get_report_details(report_id):
+    """
+    GET /api/admin/reports/<report_id>
+
+    Returns complete details of a report.
+    """
+
+    try:
+        report = get_report_details_service(report_id)
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "data": {
+                        "report_id": report.report_id,
+                        "reported_by": report.reported_by,
+                        "reported_user": report.reported_user,
+                        "reason": report.reason,
+                        "description": report.description,
+                        "status": report.status,
+                        "resolved_by": report.resolved_by,
+                        "created_at": report.created_at.isoformat(),
+                        "resolved_at": (
+                            report.resolved_at.isoformat()
+                            if report.resolved_at
+                            else None
+                        ),
+                    },
+                }
+            ),
+            200,
+        )
+
+    except ValidationError as err:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": err.message,
+                }
+            ),
+            400,
+        )
+
+    except ResourceNotFoundError as err:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": err.message,
+                }
+            ),
+            404,
+        )
+
+    except AuthorizationError as err:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": err.message,
+                }
+            ),
+            403,
+        )
+
+    except Exception as err:
+        current_app.logger.exception(
+            f"Unexpected error in get_report_details: {str(err)}"
+        )
+
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "An unexpected error occurred.",
+                }
+            ),
+            500,
+        )
+
+
+@admin_bp.route("/reports/<int:report_id>/resolve", methods=["PATCH"])
+@jwt_required()
+def resolve_report(report_id):
+    """
+    PATCH /api/admin/reports/<report_id>/resolve
+
+    Resolves a pending report.
+    """
+
+    try:
+        report = resolve_report_service(report_id)
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "Report resolved successfully.",
+                    "data": {
+                        "report_id": report.report_id,
+                        "status": report.status,
+                        "resolved_by": report.resolved_by,
+                        "resolved_at": report.resolved_at.isoformat(),
+                    },
+                }
+            ),
+            200,
+        )
+
+    except ValidationError as err:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": err.message,
+                }
+            ),
+            400,
+        )
+
+    except ResourceNotFoundError as err:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": err.message,
+                }
+            ),
+            404,
+        )
+
+    except AuthorizationError as err:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": err.message,
+                }
+            ),
+            403,
+        )
+
+    except Exception as err:
+        current_app.logger.exception(f"Unexpected error in resolve_report: {str(err)}")
+
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "An unexpected error occurred.",
+                }
+            ),
+            500,
+        )
+
+
+@admin_bp.route("/reports/<int:report_id>/dismiss", methods=["PATCH"])
+@jwt_required()
+def dismiss_report(report_id):
+    """
+    PATCH /api/admin/reports/<report_id>/dismiss
+
+    Dismisses a pending report.
+    """
+
+    try:
+        report = dismiss_report_service(report_id)
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "Report dismissed successfully.",
+                    "data": {
+                        "report_id": report.report_id,
+                        "status": report.status,
+                        "resolved_by": report.resolved_by,
+                        "resolved_at": report.resolved_at.isoformat(),
+                    },
+                }
+            ),
+            200,
+        )
+
+    except ValidationError as err:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": err.message,
+                }
+            ),
+            400,
+        )
+
+    except ResourceNotFoundError as err:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": err.message,
+                }
+            ),
+            404,
+        )
+
+    except AuthorizationError as err:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": err.message,
+                }
+            ),
+            403,
+        )
+
+    except Exception as err:
+        current_app.logger.exception(f"Unexpected error in dismiss_report: {str(err)}")
 
         return (
             jsonify(

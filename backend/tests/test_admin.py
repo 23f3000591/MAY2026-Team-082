@@ -1,4 +1,5 @@
 import pytest
+from app.models.report import Report
 
 
 class TestAdmin:
@@ -785,3 +786,653 @@ class TestAdmin:
         assert response.status_code == 400
 
         assert response.get_json()["message"] == "Mentor is already verified."
+
+    def test_get_reports_success(
+        self,
+        client,
+        database,
+        auth_admin,
+        sample_mentor,
+        sample_learner,
+    ):
+        """Test admin can get all reports."""
+
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            description="Reported content violates community guidelines.",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        response = client.get(
+            "/api/admin/reports",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert len(data["data"]) == 1
+        assert data["data"][0]["report_id"] == report.report_id
+        assert data["data"][0]["reported_by"] == sample_learner.user_id
+        assert data["data"][0]["reported_user"] == sample_mentor.user_id
+        assert data["data"][0]["reason"] == "Inappropriate content"
+        assert data["data"][0]["status"] == "Pending"
+
+    def test_get_reports_filter_by_status(
+        self,
+        client,
+        database,
+        auth_admin,
+        sample_mentor,
+        sample_learner,
+    ):
+        """Test filtering reports by status."""
+
+        pending_report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Spam",
+            description="Spam content.",
+            status="Pending",
+        )
+
+        resolved_report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            description="Inappropriate content.",
+            status="Resolved",
+        )
+
+        database.session.add_all([pending_report, resolved_report])
+        database.session.commit()
+
+        response = client.get(
+            "/api/admin/reports?status=Pending",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert len(data["data"]) == 1
+        assert data["data"][0]["status"] == "Pending"
+
+    def test_get_reports_filter_by_reported_user(
+        self,
+        client,
+        database,
+        auth_admin,
+        sample_mentor,
+        sample_learner,
+    ):
+        """Test filtering reports by reported user."""
+
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Harassment",
+            description="Reported for harassment.",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        response = client.get(
+            f"/api/admin/reports?reported_user={sample_mentor.user_id}",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert len(data["data"]) == 1
+        assert data["data"][0]["reported_user"] == sample_mentor.user_id
+
+    def test_get_reports_filter_by_reported_by(
+        self,
+        client,
+        database,
+        auth_admin,
+        sample_mentor,
+        sample_learner,
+    ):
+        """Test filtering reports by reporter."""
+
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Spam",
+            description="Reported as spam.",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        response = client.get(
+            f"/api/admin/reports?reported_by={sample_learner.user_id}",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert len(data["data"]) == 1
+        assert data["data"][0]["reported_by"] == sample_learner.user_id
+
+    def test_get_reports_filter_by_reason(
+        self,
+        client,
+        database,
+        auth_admin,
+        sample_mentor,
+        sample_learner,
+    ):
+        """Test filtering reports by reason."""
+
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            description="Content violates community guidelines.",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        response = client.get(
+            "/api/admin/reports?reason=inappropriate",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert len(data["data"]) == 1
+        assert data["data"][0]["reason"] == "Inappropriate content"
+
+    def test_get_reports_combined_filters(
+        self,
+        client,
+        database,
+        auth_admin,
+        sample_mentor,
+        sample_learner,
+    ):
+        """Test applying multiple report filters."""
+
+        matching_report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            description="Violation of community guidelines.",
+            status="Pending",
+        )
+
+        other_report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Spam",
+            description="Spam content.",
+            status="Resolved",
+        )
+
+        database.session.add_all([matching_report, other_report])
+        database.session.commit()
+
+        response = client.get(
+            f"/api/admin/reports"
+            f"?status=Pending"
+            f"&reported_user={sample_mentor.user_id}"
+            f"&reported_by={sample_learner.user_id}"
+            f"&reason=inappropriate",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert len(data["data"]) == 1
+        assert data["data"][0]["report_id"] == matching_report.report_id
+
+    def test_get_reports_invalid_status(
+        self,
+        client,
+        auth_admin,
+    ):
+        """Test invalid report status filter."""
+
+        response = client.get(
+            "/api/admin/reports?status=Invalid",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 400
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+
+    def test_get_reports_invalid_reported_user(
+        self,
+        client,
+        auth_admin,
+    ):
+        """Test invalid reported_user filter."""
+
+        response = client.get(
+            "/api/admin/reports?reported_user=abc",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 400
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+
+    def test_get_reports_invalid_reported_by(
+        self,
+        client,
+        auth_admin,
+    ):
+        """Test invalid reported_by filter."""
+
+        response = client.get(
+            "/api/admin/reports?reported_by=abc",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 400
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+
+    def test_get_reports_non_admin(
+        self,
+        client,
+        auth_learner,
+    ):
+        """Test non-admin cannot view reports."""
+
+        response = client.get(
+            "/api/admin/reports",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 403
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+
+    def test_get_report_details_success(
+        self,
+        client,
+        auth_admin,
+        database,
+        sample_learner,
+        sample_mentor,
+    ):
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            description="This content violates community guidelines.",
+            status="Pending",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        response = client.get(
+            f"/api/admin/reports/{report.report_id}",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert data["data"]["report_id"] == report.report_id
+        assert data["data"]["reported_by"] == sample_learner.user_id
+        assert data["data"]["reported_user"] == sample_mentor.user_id
+        assert data["data"]["reason"] == "Inappropriate content"
+        assert data["data"]["description"] == (
+            "This content violates community guidelines."
+        )
+        assert data["data"]["status"] == "Pending"
+
+    def test_get_report_details_not_found(
+        self,
+        client,
+        auth_admin,
+    ):
+        response = client.get(
+            "/api/admin/reports/99999",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 404
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert data["message"] == "Report not found."
+
+    def test_get_report_details_non_admin(
+        self,
+        client,
+        auth_learner,
+        database,
+        sample_learner,
+        sample_mentor,
+    ):
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            description="This content violates community guidelines.",
+            status="Pending",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        response = client.get(
+            f"/api/admin/reports/{report.report_id}",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 403
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert data["message"] == "Only administrators can view reports."
+
+    def test_get_report_details_suspended_user(
+        self,
+        client,
+        auth_admin,
+        database,
+        sample_learner,
+        sample_mentor,
+    ):
+        sample_mentor.is_suspended = True
+
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            description="Content reported from a suspended user.",
+            status="Pending",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        response = client.get(
+            f"/api/admin/reports/{report.report_id}",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert data["data"]["report_id"] == report.report_id
+        assert data["data"]["reported_user"] == sample_mentor.user_id
+        assert data["data"]["status"] == "Pending"
+
+    def test_resolve_report_success(
+        self,
+        client,
+        auth_admin,
+        database,
+        sample_learner,
+        sample_mentor,
+    ):
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            description="Content violates community guidelines.",
+            status="Pending",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        response = client.patch(
+            f"/api/admin/reports/{report.report_id}/resolve",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert data["data"]["report_id"] == report.report_id
+        assert data["data"]["status"] == "Resolved"
+
+        database.session.refresh(report)
+
+        assert report.status == "Resolved"
+        assert report.resolved_by == auth_admin["user"].user_id
+        assert report.resolved_at is not None
+
+    def test_resolve_report_not_found(
+        self,
+        client,
+        auth_admin,
+    ):
+        response = client.patch(
+            "/api/admin/reports/99999/resolve",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 404
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert data["message"] == "Report not found."
+
+    def test_resolve_report_non_admin(
+        self,
+        client,
+        auth_learner,
+        database,
+        sample_learner,
+        sample_mentor,
+    ):
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            description="Content violates community guidelines.",
+            status="Pending",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        response = client.patch(
+            f"/api/admin/reports/{report.report_id}/resolve",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 403
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert data["message"] == "Only administrators can resolve reports."
+
+    def test_resolve_already_processed_report(
+        self,
+        client,
+        auth_admin,
+        database,
+        sample_learner,
+        sample_mentor,
+    ):
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            description="Content violates community guidelines.",
+            status="Dismissed",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        response = client.patch(
+            f"/api/admin/reports/{report.report_id}/resolve",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 400
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert "already dismissed" in data["message"].lower()
+
+    def test_dismiss_report_success(
+        self,
+        client,
+        auth_admin,
+        database,
+        sample_learner,
+        sample_mentor,
+    ):
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            description="Content violates community guidelines.",
+            status="Pending",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        response = client.patch(
+            f"/api/admin/reports/{report.report_id}/dismiss",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert data["data"]["report_id"] == report.report_id
+        assert data["data"]["status"] == "Dismissed"
+
+        database.session.refresh(report)
+
+        assert report.status == "Dismissed"
+        assert report.resolved_by == auth_admin["user"].user_id
+        assert report.resolved_at is not None
+
+    def test_dismiss_report_not_found(
+        self,
+        client,
+        auth_admin,
+    ):
+        response = client.patch(
+            "/api/admin/reports/99999/dismiss",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 404
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert data["message"] == "Report not found."
+
+    def test_dismiss_report_non_admin(
+        self,
+        client,
+        auth_learner,
+        database,
+        sample_learner,
+        sample_mentor,
+    ):
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            description="Content violates community guidelines.",
+            status="Pending",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        response = client.patch(
+            f"/api/admin/reports/{report.report_id}/dismiss",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 403
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert data["message"] == "Only administrators can dismiss reports."
+
+    def test_dismiss_already_processed_report(
+        self,
+        client,
+        auth_admin,
+        database,
+        sample_learner,
+        sample_mentor,
+    ):
+        report = Report(
+            reported_by=sample_learner.user_id,
+            reported_user=sample_mentor.user_id,
+            reason="Inappropriate content",
+            description="Content violates community guidelines.",
+            status="Resolved",
+        )
+
+        database.session.add(report)
+        database.session.commit()
+
+        response = client.patch(
+            f"/api/admin/reports/{report.report_id}/dismiss",
+            headers=auth_admin["headers"],
+        )
+
+        assert response.status_code == 400
+
+        data = response.get_json()
+
+        assert "already resolved" in data["message"].lower()
