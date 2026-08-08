@@ -33,6 +33,98 @@ class AuthorizationError(Exception):
         super().__init__(message)
 
 
+def get_users_service(filters):
+    """
+    Retrieves users for the admin dashboard with optional search and filters.
+    """
+
+    admin_id = int(get_jwt_identity())
+
+    admin = db.session.get(User, admin_id)
+
+    if not admin:
+        raise ResourceNotFoundError("Admin not found.")
+
+    if admin.role != "admin":
+        raise AuthorizationError("Only administrators can view users.")
+
+    query = User.query
+
+    search = filters.get("search")
+    user_id = filters.get("user_id")
+    role = filters.get("role")
+    is_verified = filters.get("is_verified")
+    is_suspended = filters.get("is_suspended")
+
+    if search:
+        search = search.strip()
+
+        query = query.filter(
+            db.or_(
+                User.full_name.ilike(f"%{search}%"),
+                User.email.ilike(f"%{search}%"),
+            )
+        )
+
+    if user_id:
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            raise ValidationError("user_id must be a valid integer.")
+
+        query = query.filter(User.user_id == user_id)
+
+    if role:
+        role = role.lower()
+
+        if role not in ["admin", "mentor", "learner"]:
+            raise ValidationError("role must be admin, mentor, or learner.")
+
+        if role == "mentor":
+            query = query.filter(User.is_mentor.is_(True))
+        elif role == "learner":
+            query = query.filter(User.is_learner.is_(True))
+        else:
+            query = query.filter(User.role == "admin")
+
+    if is_verified is not None:
+        if is_verified.lower() not in ["true", "false"]:
+            raise ValidationError("is_verified must be true or false.")
+
+        query = query.filter(User.is_verified.is_(is_verified.lower() == "true"))
+
+    if is_suspended is not None:
+        if is_suspended.lower() not in ["true", "false"]:
+            raise ValidationError("is_suspended must be true or false.")
+
+        query = query.filter(User.is_suspended.is_(is_suspended.lower() == "true"))
+
+    return query.order_by(User.user_id.asc()).all()
+
+
+def get_user_details_service(user_id):
+    """
+    Returns complete details of a user for admin view.
+    """
+
+    admin_id = int(get_jwt_identity())
+
+    admin = db.session.get(User, admin_id)
+
+    if not admin:
+        raise ResourceNotFoundError("Admin not found.")
+
+    if admin.role != "admin":
+        raise AuthorizationError("Only administrators can view user details.")
+
+    user = db.session.get(User, user_id)
+
+    if not user:
+        raise ResourceNotFoundError("User not found.")
+
+    return user
+
+
 def update_user_suspension_service(user_id, data):
     """
     Suspends or unsuspends a user.
