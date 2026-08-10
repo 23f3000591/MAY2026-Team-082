@@ -5,6 +5,7 @@ from .availability import availability_bp
 from .session import session_bp
 from .mentor import mentor_bp
 from .user import user_bp
+from .admin import admin_bp
 from .chat import chat_bp
 from .notification import notification_bp
 
@@ -16,6 +17,7 @@ api_bp.register_blueprint(availability_bp)
 api_bp.register_blueprint(session_bp)
 api_bp.register_blueprint(mentor_bp)
 api_bp.register_blueprint(user_bp)
+api_bp.register_blueprint(admin_bp)
 api_bp.register_blueprint(chat_bp)
 api_bp.register_blueprint(notification_bp)
 
