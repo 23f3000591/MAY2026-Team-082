@@ -8,6 +8,7 @@ from .user import user_bp
 from .admin import admin_bp
 from .chat import chat_bp
 from .notification import notification_bp
+from .review import review_bp
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -20,6 +21,7 @@ api_bp.register_blueprint(user_bp)
 api_bp.register_blueprint(admin_bp)
 api_bp.register_blueprint(chat_bp)
 api_bp.register_blueprint(notification_bp)
+api_bp.register_blueprint(review_bp)
 
 
 @api_bp.route("/health", methods=["GET"])
