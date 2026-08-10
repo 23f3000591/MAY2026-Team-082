@@ -139,6 +139,7 @@ def test_rate_mentor_invalid_session(
         json={
             "session_id": 999999,
             "rating": 5,
+            "review_text": "Good mentoring session.",
         },
         headers=auth_learner["headers"],
     )
@@ -161,6 +162,7 @@ def test_rate_mentor_duplicate_rating(
     payload = {
         "session_id": session.session_id,
         "rating": 5,
+        "review_text": "Good mentoring session.",
     }
 
     first_response = client.post(
@@ -217,8 +219,114 @@ def test_learner_cannot_rate_session_they_did_not_attend(
         json={
             "session_id": session.session_id,
             "rating": 5,
+            "review_text": "Good mentoring session.",
         },
         headers=other_headers,
     )
 
     assert response.status_code == 403
+def test_submit_written_review_success(
+    client,
+    auth_learner,
+    sample_mentor,
+    database,
+):
+    session = create_completed_session(
+        database,
+        auth_learner,
+        sample_mentor,
+    )
+
+    response = client.post(
+        "/api/reviews/",
+        json={
+            "session_id": session.session_id,
+            "rating": 5,
+            "review_text": "Excellent mentor. Very helpful and clear.",
+        },
+        headers=auth_learner["headers"],
+    )
+
+    assert response.status_code == 201
+
+    data = response.get_json()
+
+    assert data["status"] == "success"
+    assert data["data"]["review_text"] == (
+        "Excellent mentor. Very helpful and clear."
+    )
+
+
+def test_written_review_cannot_be_empty(
+    client,
+    auth_learner,
+    sample_mentor,
+    database,
+):
+    session = create_completed_session(
+        database,
+        auth_learner,
+        sample_mentor,
+    )
+
+    response = client.post(
+        "/api/reviews/",
+        json={
+            "session_id": session.session_id,
+            "rating": 5,
+            "review_text": "",
+        },
+        headers=auth_learner["headers"],
+    )
+
+    assert response.status_code == 400
+
+
+def test_written_review_cannot_be_whitespace_only(
+    client,
+    auth_learner,
+    sample_mentor,
+    database,
+):
+    session = create_completed_session(
+        database,
+        auth_learner,
+        sample_mentor,
+    )
+
+    response = client.post(
+        "/api/reviews/",
+        json={
+            "session_id": session.session_id,
+            "rating": 5,
+            "review_text": "   ",
+        },
+        headers=auth_learner["headers"],
+    )
+
+    assert response.status_code == 400
+
+
+def test_written_review_must_be_string(
+    client,
+    auth_learner,
+    sample_mentor,
+    database,
+):
+    session = create_completed_session(
+        database,
+        auth_learner,
+        sample_mentor,
+    )
+
+    response = client.post(
+        "/api/reviews/",
+        json={
+            "session_id": session.session_id,
+            "rating": 5,
+            "review_text": 12345,
+        },
+        headers=auth_learner["headers"],
+    )
+
+    assert response.status_code == 400

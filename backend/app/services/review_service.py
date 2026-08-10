@@ -73,8 +73,8 @@ def rate_mentor_service(data):
     if rating < 1 or rating > 5:
         raise ValidationError("rating must be between 1 and 5.")
 
-    if review_text is not None and not isinstance(review_text, str):
-        raise ValidationError("review_text must be a string.")
+    if not isinstance(review_text, str) or not review_text.strip():
+        raise ValidationError("review_text is required and cannot be empty.")
 
     learner_id = int(get_jwt_identity())
 
