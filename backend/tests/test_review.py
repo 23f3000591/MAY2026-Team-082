@@ -7,6 +7,7 @@ from app.models.review import Review
 from app.models.session import Session
 from app.models.skill import Skill
 from app.models.user import User
+from app.models.report import Report
 
 
 def create_completed_session(database, auth_learner, sample_mentor):
@@ -416,3 +417,65 @@ def test_get_mentor_reviews_unauthorized(
     )
 
     assert response.status_code == 401
+
+def test_report_review_success(
+    client,
+    auth_learner,
+    sample_mentor,
+    database,
+):
+    session = create_completed_session(
+        database,
+        auth_learner,
+        sample_mentor,
+    )
+
+    response = client.post(
+        "/api/reviews/",
+        json={
+            "session_id": session.session_id,
+            "rating": 5,
+            "review_text": "Excellent mentoring session.",
+        },
+        headers=auth_learner["headers"],
+    )
+
+    assert response.status_code == 201
+
+    review = Review.query.one()
+
+    response = client.post(
+        f"/api/reviews/{review.review_id}/report",
+        json={
+            "reason": "Inappropriate content",
+            "description": "The review contains inappropriate language.",
+        },
+        headers=auth_learner["headers"],
+    )
+
+    assert response.status_code == 201
+
+    data = response.get_json()
+
+    assert data["status"] == "success"
+    assert data["message"] == "Review reported successfully"
+
+    assert data["data"]["review_id"] == review.review_id
+    assert data["data"]["reported_by"] == auth_learner["user"].user_id
+    assert data["data"]["reported_user"] == sample_mentor.user_id
+    assert data["data"]["reason"] == "Inappropriate content"
+    assert data["data"]["description"] == (
+        "The review contains inappropriate language."
+    )
+    assert data["data"]["status"] == "Pending"
+
+    report = Report.query.one()
+
+    assert report.review_id == review.review_id
+    assert report.reported_by == auth_learner["user"].user_id
+    assert report.reported_user == sample_mentor.user_id
+    assert report.reason == "Inappropriate content"
+    assert report.description == (
+        "The review contains inappropriate language."
+    )
+    assert report.status == "Pending"

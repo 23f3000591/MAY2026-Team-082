@@ -10,6 +10,7 @@ from app.services.review_service import (
     rate_mentor_service,
 )
 
+from app.services.report_service import report_review_service
 
 review_bp = Blueprint(
     "review",
@@ -149,6 +150,80 @@ def get_mentor_reviews(mentor_id):
     except Exception as err:
         current_app.logger.exception(
             f"Unexpected error in get_mentor_reviews: {str(err)}"
+        )
+
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "An unexpected error occurred.",
+                }
+            ),
+            500,
+        )
+
+@review_bp.route("/<int:review_id>/report", methods=["POST"])
+@jwt_required()
+def report_review(review_id):
+    """
+    POST /api/reviews/<review_id>/report
+
+    Allows an authenticated user to report a review.
+    """
+
+    data = request.get_json(silent=True) or {}
+
+    data["review_id"] = review_id
+
+    try:
+        report = report_review_service(data)
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "Review reported successfully",
+                    "data": {
+                        "report_id": report.report_id,
+                        "review_id": report.review_id,
+                        "reported_by": report.reported_by,
+                        "reported_user": report.reported_user,
+                        "reason": report.reason,
+                        "description": report.description,
+                        "status": report.status,
+                    },
+                }
+            ),
+            201,
+        )
+
+    except ValidationError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 400
+
+    except AuthorizationError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 403
+
+    except NotFoundError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 404
+
+    except Exception as err:
+        current_app.logger.exception(
+            f"Unexpected error in report_review: {str(err)}"
         )
 
         return (
