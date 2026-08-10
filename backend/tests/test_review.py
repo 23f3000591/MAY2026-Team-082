@@ -330,3 +330,89 @@ def test_written_review_must_be_string(
     )
 
     assert response.status_code == 400
+
+def test_get_mentor_reviews_success(
+    client,
+    auth_learner,
+    sample_mentor,
+    database,
+):
+    session = create_completed_session(
+        database,
+        auth_learner,
+        sample_mentor,
+    )
+
+    response = client.post(
+        "/api/reviews/",
+        json={
+            "session_id": session.session_id,
+            "rating": 5,
+            "review_text": "Excellent mentoring session.",
+        },
+        headers=auth_learner["headers"],
+    )
+
+    assert response.status_code == 201
+
+    response = client.get(
+        f"/api/reviews/mentor/{sample_mentor.user_id}",
+        headers=auth_learner["headers"],
+    )
+
+    assert response.status_code == 200
+
+    data = response.get_json()
+
+    assert data["status"] == "success"
+    assert data["message"] == "Mentor reviews retrieved successfully"
+    assert len(data["data"]) == 1
+
+    review = data["data"][0]
+
+    assert review["session_id"] == session.session_id
+    assert review["learner_id"] == auth_learner["user"].user_id
+    assert review["mentor_id"] == sample_mentor.user_id
+    assert review["rating"] == 5
+    assert review["review_text"] == "Excellent mentoring session."
+
+
+def test_get_mentor_reviews_no_reviews(
+    client,
+    auth_learner,
+    sample_mentor,
+):
+    response = client.get(
+        f"/api/reviews/mentor/{sample_mentor.user_id}",
+        headers=auth_learner["headers"],
+    )
+
+    assert response.status_code == 200
+
+    data = response.get_json()
+
+    assert data["status"] == "success"
+    assert data["data"] == []
+
+
+def test_get_mentor_reviews_invalid_mentor(
+    client,
+    auth_learner,
+):
+    response = client.get(
+        "/api/reviews/mentor/999999",
+        headers=auth_learner["headers"],
+    )
+
+    assert response.status_code == 404
+
+
+def test_get_mentor_reviews_unauthorized(
+    client,
+    sample_mentor,
+):
+    response = client.get(
+        f"/api/reviews/mentor/{sample_mentor.user_id}",
+    )
+
+    assert response.status_code == 401

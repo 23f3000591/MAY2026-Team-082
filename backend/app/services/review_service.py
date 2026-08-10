@@ -129,3 +129,27 @@ def rate_mentor_service(data):
         raise
 
     return review
+
+def get_mentor_reviews_service(mentor_id):
+    """
+    Retrieves all reviews submitted for a specific mentor.
+    """
+
+    try:
+        mentor_id = int(mentor_id)
+    except (ValueError, TypeError):
+        raise ValidationError("mentor_id must be a valid integer.")
+
+    mentor = db.session.get(User, mentor_id)
+
+    if mentor is None or not mentor.is_mentor:
+        raise NotFoundError("Mentor not found.")
+
+    reviews = (
+        Review.query
+        .filter_by(mentor_id=mentor_id)
+        .order_by(Review.created_at.desc())
+        .all()
+    )
+
+    return reviews

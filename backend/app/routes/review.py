@@ -6,6 +6,7 @@ from app.services.review_service import (
     ConflictError,
     NotFoundError,
     ValidationError,
+    get_mentor_reviews_service,
     rate_mentor_service,
 )
 
@@ -94,6 +95,60 @@ def rate_mentor():
     except Exception as err:
         current_app.logger.exception(
             f"Unexpected error in rate_mentor: {str(err)}"
+        )
+
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "An unexpected error occurred.",
+                }
+            ),
+            500,
+        )
+
+@review_bp.route("/mentor/<int:mentor_id>", methods=["GET"])
+@jwt_required()
+def get_mentor_reviews(mentor_id):
+    """
+    GET /api/reviews/mentor/<mentor_id>
+
+    Returns reviews submitted for a specific mentor.
+    """
+
+    try:
+        reviews = get_mentor_reviews_service(mentor_id)
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "Mentor reviews retrieved successfully",
+                    "data": [_serialize_review(review) for review in reviews],
+                }
+            ),
+            200,
+        )
+
+    except ValidationError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 400
+
+    except NotFoundError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 404
+
+    except Exception as err:
+        current_app.logger.exception(
+            f"Unexpected error in get_mentor_reviews: {str(err)}"
         )
 
         return (
