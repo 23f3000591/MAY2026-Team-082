@@ -1,6 +1,25 @@
 import pytest
 from app.models.report import Report
 from app.models.session import Session
+from app.models.review import Review
+
+
+@pytest.fixture(scope="function")
+def sample_review(database, sample_session, sample_learner, sample_mentor):
+    """Create a valid review for report-related admin tests."""
+
+    review = Review(
+        session_id=sample_session.session_id,
+        learner_id=sample_learner.user_id,
+        mentor_id=sample_mentor.user_id,
+        rating=4,
+        review_text="Sample review for report testing.",
+    )
+
+    database.session.add(review)
+    database.session.commit()
+
+    return review
 
 
 class TestAdmin:
@@ -795,10 +814,12 @@ class TestAdmin:
         auth_admin,
         sample_mentor,
         sample_learner,
+        sample_review,
     ):
         """Test admin can get all reports."""
 
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -832,10 +853,12 @@ class TestAdmin:
         auth_admin,
         sample_mentor,
         sample_learner,
+        sample_review,
     ):
         """Test filtering reports by status."""
 
         pending_report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Spam",
@@ -844,6 +867,7 @@ class TestAdmin:
         )
 
         resolved_report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -874,10 +898,12 @@ class TestAdmin:
         auth_admin,
         sample_mentor,
         sample_learner,
+        sample_review,
     ):
         """Test filtering reports by reported user."""
 
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Harassment",
@@ -907,10 +933,12 @@ class TestAdmin:
         auth_admin,
         sample_mentor,
         sample_learner,
+        sample_review,
     ):
         """Test filtering reports by reporter."""
 
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Spam",
@@ -940,10 +968,12 @@ class TestAdmin:
         auth_admin,
         sample_mentor,
         sample_learner,
+        sample_review,
     ):
         """Test filtering reports by reason."""
 
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -973,10 +1003,12 @@ class TestAdmin:
         auth_admin,
         sample_mentor,
         sample_learner,
+        sample_review,
     ):
         """Test applying multiple report filters."""
 
         matching_report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -985,6 +1017,7 @@ class TestAdmin:
         )
 
         other_report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Spam",
@@ -1091,8 +1124,10 @@ class TestAdmin:
         database,
         sample_learner,
         sample_mentor,
+        sample_review,
     ):
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -1146,8 +1181,10 @@ class TestAdmin:
         database,
         sample_learner,
         sample_mentor,
+        sample_review,
     ):
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -1177,10 +1214,12 @@ class TestAdmin:
         database,
         sample_learner,
         sample_mentor,
+        sample_review,
     ):
         sample_mentor.is_suspended = True
 
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -1212,8 +1251,10 @@ class TestAdmin:
         database,
         sample_learner,
         sample_mentor,
+        sample_review,
     ):
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -1267,8 +1308,10 @@ class TestAdmin:
         database,
         sample_learner,
         sample_mentor,
+        sample_review,
     ):
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -1298,8 +1341,10 @@ class TestAdmin:
         database,
         sample_learner,
         sample_mentor,
+        sample_review,
     ):
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -1329,8 +1374,10 @@ class TestAdmin:
         database,
         sample_learner,
         sample_mentor,
+        sample_review,
     ):
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -1384,8 +1431,10 @@ class TestAdmin:
         database,
         sample_learner,
         sample_mentor,
+        sample_review,
     ):
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -1415,8 +1464,10 @@ class TestAdmin:
         database,
         sample_learner,
         sample_mentor,
+        sample_review,
     ):
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -1445,8 +1496,10 @@ class TestAdmin:
         database,
         sample_learner,
         sample_mentor,
+        sample_review,
     ):
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -1490,8 +1543,10 @@ class TestAdmin:
         database,
         sample_learner,
         sample_mentor,
+        sample_review,
     ):
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -1535,8 +1590,10 @@ class TestAdmin:
         database,
         sample_learner,
         sample_mentor,
+        sample_review,
     ):
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -1573,8 +1630,10 @@ class TestAdmin:
         database,
         sample_learner,
         sample_mentor,
+        sample_review,
     ):
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -1611,8 +1670,10 @@ class TestAdmin:
         database,
         sample_learner,
         sample_mentor,
+        sample_review,
     ):
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",
@@ -1725,10 +1786,12 @@ class TestAdmin:
         sample_session,
         sample_learner,
         sample_mentor,
+        sample_review,
     ):
         sample_session.status = "Completed"
 
         report = Report(
+            review_id=sample_review.review_id,
             reported_by=sample_learner.user_id,
             reported_user=sample_mentor.user_id,
             reason="Inappropriate content",

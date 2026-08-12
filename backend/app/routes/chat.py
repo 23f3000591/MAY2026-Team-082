@@ -7,14 +7,58 @@ from app.services.chat_service import (
     ValidationError,
     send_message_service,
     get_received_messages_service,
+    get_unread_messages_service,
+    get_read_messages_service,
     get_conversation_service,
+    get_conversation_inbox_service,
+    search_messages_service,
+    get_conversation_search_service,
+    mark_message_read_service,
+    mark_conversation_read_service,
 )
+
 
 chat_bp = Blueprint(
     "chat",
     __name__,
     url_prefix="/chat",
 )
+
+
+def _serialize_message(message):
+    """Convert a Message object into a JSON-safe dictionary."""
+
+    return {
+        "message_id": message.message_id,
+        "sender_id": message.sender_id,
+        "receiver_id": message.receiver_id,
+        "message": message.message,
+        "is_read": message.is_read,
+        "sent_at": (
+            message.sent_at.isoformat()
+            if message.sent_at
+            else None
+        ),
+    }
+
+
+def _serialize_pagination(pagination):
+    """Return serialized paginated messages and pagination metadata."""
+
+    return {
+        "messages": [
+            _serialize_message(message)
+            for message in pagination.items
+        ],
+        "pagination": {
+            "page": pagination.page,
+            "per_page": pagination.per_page,
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "has_next": pagination.has_next,
+            "has_prev": pagination.has_prev,
+        },
+    }
 
 
 @chat_bp.route("/messages", methods=["POST"])
@@ -36,68 +80,47 @@ def send_message():
                 {
                     "status": "success",
                     "message": "Message sent successfully",
-                    "data": {
-                        "message_id": message_obj.message_id,
-                        "sender_id": message_obj.sender_id,
-                        "receiver_id": message_obj.receiver_id,
-                        "message": message_obj.message,
-                        "is_read": message_obj.is_read,
-                        "sent_at": (
-                            message_obj.sent_at.isoformat()
-                            if message_obj.sent_at
-                            else None
-                        ),
-                    },
+                    "data": _serialize_message(message_obj),
                 }
             ),
             201,
         )
 
     except ValidationError as err:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": err.message,
-                }
-            ),
-            400,
-        )
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 400
 
     except ResourceNotFoundError as err:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": err.message,
-                }
-            ),
-            404,
-        )
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 404
 
     except AuthorizationError as err:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": err.message,
-                }
-            ),
-            403,
-        )
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 403
 
     except Exception as err:
-        current_app.logger.exception(f"Unexpected error in send_message: {str(err)}")
-
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "An unexpected error occurred.",
-                }
-            ),
-            500,
+        current_app.logger.exception(
+            f"Unexpected error in send_message: {str(err)}"
         )
+
+        return jsonify(
+            {
+                "status": "error",
+                "message": "An unexpected error occurred.",
+            }
+        ), 500
 
 
 @chat_bp.route("/messages", methods=["GET"])
@@ -118,16 +141,7 @@ def get_received_messages():
                     "status": "success",
                     "message": "Messages retrieved successfully",
                     "data": [
-                        {
-                            "message_id": message.message_id,
-                            "sender_id": message.sender_id,
-                            "receiver_id": message.receiver_id,
-                            "message": message.message,
-                            "is_read": message.is_read,
-                            "sent_at": (
-                                message.sent_at.isoformat() if message.sent_at else None
-                            ),
-                        }
+                        _serialize_message(message)
                         for message in messages
                     ],
                 }
@@ -136,41 +150,358 @@ def get_received_messages():
         )
 
     except ResourceNotFoundError as err:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": err.message,
-                }
-            ),
-            404,
-        )
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 404
 
     except AuthorizationError as err:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": err.message,
-                }
-            ),
-            403,
-        )
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 403
 
     except Exception as err:
         current_app.logger.exception(
             f"Unexpected error in get_received_messages: {str(err)}"
         )
 
+        return jsonify(
+            {
+                "status": "error",
+                "message": "An unexpected error occurred.",
+            }
+        ), 500
+
+
+@chat_bp.route("/messages/unread", methods=["GET"])
+@jwt_required()
+def get_unread_messages():
+    """
+    GET /api/chat/messages/unread
+
+    Retrieves unread messages received by the logged-in user.
+    """
+
+    try:
+        messages = get_unread_messages_service()
+
         return (
             jsonify(
                 {
-                    "status": "error",
-                    "message": "An unexpected error occurred.",
+                    "status": "success",
+                    "message": "Unread messages retrieved successfully",
+                    "data": [
+                        _serialize_message(message)
+                        for message in messages
+                    ],
                 }
             ),
-            500,
+            200,
         )
+
+    except ResourceNotFoundError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 404
+
+    except AuthorizationError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 403
+
+    except Exception as err:
+        current_app.logger.exception(
+            f"Unexpected error in get_unread_messages: {str(err)}"
+        )
+
+        return jsonify(
+            {
+                "status": "error",
+                "message": "An unexpected error occurred.",
+            }
+        ), 500
+
+
+@chat_bp.route("/messages/read", methods=["GET"])
+@jwt_required()
+def get_read_messages():
+    """
+    GET /api/chat/messages/read
+
+    Retrieves read messages received by the logged-in user.
+    """
+
+    try:
+        messages = get_read_messages_service()
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "Read messages retrieved successfully",
+                    "data": [
+                        _serialize_message(message)
+                        for message in messages
+                    ],
+                }
+            ),
+            200,
+        )
+
+    except ResourceNotFoundError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 404
+
+    except AuthorizationError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 403
+
+    except Exception as err:
+        current_app.logger.exception(
+            f"Unexpected error in get_read_messages: {str(err)}"
+        )
+
+        return jsonify(
+            {
+                "status": "error",
+                "message": "An unexpected error occurred.",
+            }
+        ), 500
+
+
+@chat_bp.route("/conversations", methods=["GET"])
+@jwt_required()
+def get_conversation_inbox():
+    """
+    GET /api/chat/conversations
+
+    Retrieves the WhatsApp-style conversation inbox.
+
+    Optional query parameter:
+        ?search=John
+    """
+
+    try:
+        search = request.args.get("search")
+
+        conversations = get_conversation_inbox_service(search)
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": (
+                        "Conversation inbox retrieved successfully"
+                    ),
+                    "data": conversations,
+                }
+            ),
+            200,
+        )
+
+    except ValidationError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 400
+
+    except ResourceNotFoundError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 404
+
+    except AuthorizationError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 403
+
+    except Exception as err:
+        current_app.logger.exception(
+            f"Unexpected error in get_conversation_inbox: {str(err)}"
+        )
+
+        return jsonify(
+            {
+                "status": "error",
+                "message": "An unexpected error occurred.",
+            }
+        ), 500
+
+
+@chat_bp.route("/conversations/<int:user_id>/search", methods=["GET"])
+@jwt_required()
+def search_conversation(user_id):
+    """
+    GET /api/chat/conversations/<user_id>/search
+
+    Searches message content within a specific conversation.
+
+    Query parameters:
+        query
+        page
+        per_page
+    """
+
+    try:
+        search = request.args.get("query")
+        page = request.args.get("page", 1)
+        per_page = request.args.get("per_page", 20)
+
+        pagination = get_conversation_search_service(
+            user_id=user_id,
+            search=search,
+            page=page,
+            per_page=per_page,
+        )
+
+        data = _serialize_pagination(pagination)
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": (
+                        "Conversation search completed successfully"
+                    ),
+                    "data": data["messages"],
+                    "pagination": data["pagination"],
+                }
+            ),
+            200,
+        )
+
+    except ValidationError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 400
+
+    except ResourceNotFoundError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 404
+
+    except AuthorizationError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 403
+
+    except Exception as err:
+        current_app.logger.exception(
+            f"Unexpected error in search_conversation: {str(err)}"
+        )
+
+        return jsonify(
+            {
+                "status": "error",
+                "message": "An unexpected error occurred.",
+            }
+        ), 500
+
+
+@chat_bp.route("/messages/search", methods=["GET"])
+@jwt_required()
+def search_messages():
+    """
+    GET /api/chat/messages/search
+
+    Searches message content across all conversations.
+
+    Query parameter:
+        query
+    """
+
+    try:
+        search = request.args.get("query")
+
+        messages = search_messages_service(search)
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": (
+                        "Messages search completed successfully"
+                    ),
+                    "data": [
+                        _serialize_message(message)
+                        for message in messages
+                    ],
+                }
+            ),
+            200,
+        )
+
+    except ValidationError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 400
+
+    except ResourceNotFoundError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 404
+
+    except AuthorizationError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 403
+
+    except Exception as err:
+        current_app.logger.exception(
+            f"Unexpected error in search_messages: {str(err)}"
+        )
+
+        return jsonify(
+            {
+                "status": "error",
+                "message": "An unexpected error occurred.",
+            }
+        ), 500
 
 
 @chat_bp.route("/conversations/<int:user_id>", methods=["GET"])
@@ -179,80 +510,199 @@ def get_conversation(user_id):
     """
     GET /api/chat/conversations/<user_id>
 
-    Retrieves the conversation history between the logged-in user
-    and another user.
+    Retrieves paginated complete conversation history.
+
+    Query parameters:
+        page
+        per_page
     """
 
     try:
-        conversation = get_conversation_service(user_id)
+        page = request.args.get("page", 1)
+        per_page = request.args.get("per_page", 20)
+
+        pagination = get_conversation_service(
+            user_id=user_id,
+            page=page,
+            per_page=per_page,
+        )
+
+        data = _serialize_pagination(pagination)
 
         return (
             jsonify(
                 {
                     "status": "success",
                     "message": "Conversation retrieved successfully",
-                    "data": [
-                        {
-                            "message_id": message.message_id,
-                            "sender_id": message.sender_id,
-                            "receiver_id": message.receiver_id,
-                            "message": message.message,
-                            "is_read": message.is_read,
-                            "sent_at": (
-                                message.sent_at.isoformat() if message.sent_at else None
-                            ),
-                        }
-                        for message in conversation
-                    ],
+                    "data": data["messages"],
+                    "pagination": data["pagination"],
                 }
             ),
             200,
         )
 
     except ValidationError as err:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": err.message,
-                }
-            ),
-            400,
-        )
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 400
 
     except ResourceNotFoundError as err:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": err.message,
-                }
-            ),
-            404,
-        )
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 404
 
     except AuthorizationError as err:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": err.message,
-                }
-            ),
-            403,
-        )
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 403
 
     except Exception as err:
         current_app.logger.exception(
             f"Unexpected error in get_conversation: {str(err)}"
         )
 
+        return jsonify(
+            {
+                "status": "error",
+                "message": "An unexpected error occurred.",
+            }
+        ), 500
+
+
+@chat_bp.route(
+    "/messages/<int:message_id>/read",
+    methods=["PATCH"],
+)
+@jwt_required()
+def mark_message_read(message_id):
+    """
+    PATCH /api/chat/messages/<message_id>/read
+
+    Marks one received message as read.
+    """
+
+    try:
+        message = mark_message_read_service(message_id)
+
         return (
             jsonify(
                 {
-                    "status": "error",
-                    "message": "An unexpected error occurred.",
+                    "status": "success",
+                    "message": "Message marked as read successfully",
+                    "data": _serialize_message(message),
                 }
             ),
-            500,
+            200,
         )
+
+    except ValidationError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 400
+
+    except ResourceNotFoundError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 404
+
+    except AuthorizationError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 403
+
+    except Exception as err:
+        current_app.logger.exception(
+            f"Unexpected error in mark_message_read: {str(err)}"
+        )
+
+        return jsonify(
+            {
+                "status": "error",
+                "message": "An unexpected error occurred.",
+            }
+        ), 500
+
+
+@chat_bp.route(
+    "/conversations/<int:user_id>/read",
+    methods=["PATCH"],
+)
+@jwt_required()
+def mark_conversation_read(user_id):
+    """
+    PATCH /api/chat/conversations/<user_id>/read
+
+    Marks all unread messages received from another user as read.
+    """
+
+    try:
+        messages = mark_conversation_read_service(user_id)
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": (
+                        "Conversation messages marked as read successfully"
+                    ),
+                    "data": {
+                        "updated_count": len(messages),
+                    },
+                }
+            ),
+            200,
+        )
+
+    except ValidationError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 400
+
+    except ResourceNotFoundError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 404
+
+    except AuthorizationError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 403
+
+    except Exception as err:
+        current_app.logger.exception(
+            f"Unexpected error in mark_conversation_read: {str(err)}"
+        )
+
+        return jsonify(
+            {
+                "status": "error",
+                "message": "An unexpected error occurred.",
+            }
+        ), 500
