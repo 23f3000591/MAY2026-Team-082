@@ -736,3 +736,622 @@ class TestChat:
 
         assert data["status"] == "success"
         assert data["data"] == []
+
+
+    # ============================================================
+    # NSEP-53: CONVERSATION HISTORY PAGINATION
+    # ============================================================
+
+    def test_get_conversation_pagination_first_page(
+        self,
+        client,
+        database,
+        auth_learner,
+        sample_mentor,
+    ):
+        """Test retrieving the first page of conversation history."""
+
+        messages = []
+
+        for index in range(5):
+            messages.append(
+                Message(
+                    sender_id=auth_learner["user"].user_id,
+                    receiver_id=sample_mentor.user_id,
+                    message=f"Message {index + 1}",
+                    is_read=False,
+                )
+            )
+
+        database.session.add_all(messages)
+        database.session.commit()
+
+        response = client.get(
+            f"/api/chat/conversations/{sample_mentor.user_id}"
+            "?page=1&per_page=2",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert len(data["data"]) == 2
+
+        assert data["pagination"]["page"] == 1
+        assert data["pagination"]["per_page"] == 2
+        assert data["pagination"]["total"] == 5
+        assert data["pagination"]["pages"] == 3
+        assert data["pagination"]["has_next"] is True
+        assert data["pagination"]["has_prev"] is False
+
+    def test_get_conversation_pagination_second_page(
+        self,
+        client,
+        database,
+        auth_learner,
+        sample_mentor,
+    ):
+        """Test retrieving the second page of conversation history."""
+
+        messages = []
+
+        for index in range(5):
+            messages.append(
+                Message(
+                    sender_id=auth_learner["user"].user_id,
+                    receiver_id=sample_mentor.user_id,
+                    message=f"Message {index + 1}",
+                    is_read=False,
+                )
+            )
+
+        database.session.add_all(messages)
+        database.session.commit()
+
+        response = client.get(
+            f"/api/chat/conversations/{sample_mentor.user_id}"
+            "?page=2&per_page=2",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert len(data["data"]) == 2
+
+        assert data["pagination"]["page"] == 2
+        assert data["pagination"]["per_page"] == 2
+        assert data["pagination"]["total"] == 5
+        assert data["pagination"]["pages"] == 3
+        assert data["pagination"]["has_next"] is True
+        assert data["pagination"]["has_prev"] is True
+
+    def test_get_conversation_pagination_last_page(
+        self,
+        client,
+        database,
+        auth_learner,
+        sample_mentor,
+    ):
+        """Test retrieving the final partial page."""
+
+        messages = []
+
+        for index in range(5):
+            messages.append(
+                Message(
+                    sender_id=auth_learner["user"].user_id,
+                    receiver_id=sample_mentor.user_id,
+                    message=f"Message {index + 1}",
+                    is_read=False,
+                )
+            )
+
+        database.session.add_all(messages)
+        database.session.commit()
+
+        response = client.get(
+            f"/api/chat/conversations/{sample_mentor.user_id}"
+            "?page=3&per_page=2",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert len(data["data"]) == 1
+
+        assert data["pagination"]["page"] == 3
+        assert data["pagination"]["per_page"] == 2
+        assert data["pagination"]["total"] == 5
+        assert data["pagination"]["pages"] == 3
+        assert data["pagination"]["has_next"] is False
+        assert data["pagination"]["has_prev"] is True
+
+    def test_get_conversation_pagination_default_values(
+        self,
+        client,
+        database,
+        auth_learner,
+        sample_mentor,
+    ):
+        """Test default pagination values."""
+
+        message = Message(
+            sender_id=auth_learner["user"].user_id,
+            receiver_id=sample_mentor.user_id,
+            message="Default pagination test",
+            is_read=False,
+        )
+
+        database.session.add(message)
+        database.session.commit()
+
+        response = client.get(
+            f"/api/chat/conversations/{sample_mentor.user_id}",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["pagination"]["page"] == 1
+        assert data["pagination"]["per_page"] == 20
+        assert data["pagination"]["total"] == 1
+
+    def test_get_conversation_invalid_page(
+        self,
+        client,
+        auth_learner,
+        sample_mentor,
+    ):
+        """Test invalid page value."""
+
+        response = client.get(
+            f"/api/chat/conversations/{sample_mentor.user_id}"
+            "?page=0&per_page=2",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 400
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert data["message"] == (
+            "page must be greater than or equal to 1."
+        )
+
+    def test_get_conversation_invalid_per_page(
+        self,
+        client,
+        auth_learner,
+        sample_mentor,
+    ):
+        """Test invalid per_page value."""
+
+        response = client.get(
+            f"/api/chat/conversations/{sample_mentor.user_id}"
+            "?page=1&per_page=0",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 400
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert data["message"] == (
+            "per_page must be greater than or equal to 1."
+        )
+
+    def test_get_conversation_per_page_limit(
+        self,
+        client,
+        auth_learner,
+        sample_mentor,
+    ):
+        """Test maximum per_page validation."""
+
+        response = client.get(
+            f"/api/chat/conversations/{sample_mentor.user_id}"
+            "?page=1&per_page=101",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 400
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert data["message"] == (
+            "per_page cannot exceed 100."
+        )
+
+    def test_get_conversation_invalid_pagination_type(
+        self,
+        client,
+        auth_learner,
+        sample_mentor,
+    ):
+        """Test non-integer pagination parameters."""
+
+        response = client.get(
+            f"/api/chat/conversations/{sample_mentor.user_id}"
+            "?page=abc&per_page=xyz",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 400
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert data["message"] == (
+            "page and per_page must be valid integers."
+        )
+
+    def test_get_conversation_preserves_two_way_history(
+        self,
+        client,
+        database,
+        auth_learner,
+        sample_mentor,
+    ):
+        """
+        Test pagination still returns both sent and received
+        messages within the conversation.
+        """
+
+        message1 = Message(
+            sender_id=auth_learner["user"].user_id,
+            receiver_id=sample_mentor.user_id,
+            message="From learner",
+            is_read=False,
+        )
+
+        message2 = Message(
+            sender_id=sample_mentor.user_id,
+            receiver_id=auth_learner["user"].user_id,
+            message="From mentor",
+            is_read=False,
+        )
+
+        database.session.add_all([message1, message2])
+        database.session.commit()
+
+        response = client.get(
+            f"/api/chat/conversations/{sample_mentor.user_id}"
+            "?page=1&per_page=10",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        messages = [
+            item["message"]
+            for item in data["data"]
+        ]
+
+        assert "From learner" in messages
+        assert "From mentor" in messages
+
+    def test_get_conversation_pagination_does_not_mark_read(
+        self,
+        client,
+        database,
+        auth_learner,
+        sample_mentor,
+    ):
+        """
+        Test paginated conversation retrieval does not change
+        read status.
+        """
+
+        message = Message(
+            sender_id=sample_mentor.user_id,
+            receiver_id=auth_learner["user"].user_id,
+            message="Unread conversation message",
+            is_read=False,
+        )
+
+        database.session.add(message)
+        database.session.commit()
+
+        response = client.get(
+            f"/api/chat/conversations/{sample_mentor.user_id}"
+            "?page=1&per_page=10",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 200
+
+        database.session.refresh(message)
+
+        assert message.is_read is False
+
+    # ============================================================
+    # NSEP-53: CONVERSATION SEARCH
+    # ============================================================
+
+    def test_search_conversation_messages(
+        self,
+        client,
+        database,
+        auth_learner,
+        sample_mentor,
+    ):
+        """Test searching messages within one conversation."""
+
+        message1 = Message(
+            sender_id=auth_learner["user"].user_id,
+            receiver_id=sample_mentor.user_id,
+            message="Python is my favorite language",
+            is_read=False,
+        )
+
+        message2 = Message(
+            sender_id=sample_mentor.user_id,
+            receiver_id=auth_learner["user"].user_id,
+            message="I prefer Java",
+            is_read=False,
+        )
+
+        database.session.add_all([message1, message2])
+        database.session.commit()
+
+        response = client.get(
+            f"/api/chat/conversations/{sample_mentor.user_id}"
+            "/search?query=Python",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert len(data["data"]) == 1
+
+        assert data["data"][0]["message"] == (
+            "Python is my favorite language"
+        )
+
+        assert data["pagination"]["page"] == 1
+        assert data["pagination"]["per_page"] == 20
+        assert data["pagination"]["total"] == 1
+
+    def test_search_conversation_messages_from_both_users(
+        self,
+        client,
+        database,
+        auth_learner,
+        sample_mentor,
+    ):
+        """
+        Test conversation search checks messages sent by both
+        participants.
+        """
+
+        message1 = Message(
+            sender_id=auth_learner["user"].user_id,
+            receiver_id=sample_mentor.user_id,
+            message="Python is useful",
+            is_read=False,
+        )
+
+        message2 = Message(
+            sender_id=sample_mentor.user_id,
+            receiver_id=auth_learner["user"].user_id,
+            message="Python is easy",
+            is_read=False,
+        )
+
+        database.session.add_all([message1, message2])
+        database.session.commit()
+
+        response = client.get(
+            f"/api/chat/conversations/{sample_mentor.user_id}"
+            "/search?query=Python",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert len(data["data"]) == 2
+
+        messages = [
+            item["message"]
+            for item in data["data"]
+        ]
+
+        assert "Python is useful" in messages
+        assert "Python is easy" in messages
+
+    def test_search_conversation_messages_no_results(
+        self,
+        client,
+        auth_learner,
+        sample_mentor,
+    ):
+        """Test conversation search with no matching messages."""
+
+        response = client.get(
+            f"/api/chat/conversations/{sample_mentor.user_id}"
+            "/search?query=nonexistent",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert data["data"] == []
+        assert data["pagination"]["total"] == 0
+
+    def test_search_conversation_messages_empty_query(
+        self,
+        client,
+        auth_learner,
+        sample_mentor,
+    ):
+        """Test conversation search with an empty query."""
+
+        response = client.get(
+            f"/api/chat/conversations/{sample_mentor.user_id}"
+            "/search?query=",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 400
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert data["message"] == (
+            "Search query cannot be empty."
+        )
+
+    def test_search_conversation_messages_missing_query(
+        self,
+        client,
+        auth_learner,
+        sample_mentor,
+    ):
+        """Test conversation search without a query."""
+
+        response = client.get(
+            f"/api/chat/conversations/{sample_mentor.user_id}"
+            "/search",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 400
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert data["message"] == (
+            "Search query cannot be empty."
+        )
+
+    def test_search_conversation_invalid_user(
+        self,
+        client,
+        auth_learner,
+    ):
+        """Test searching a conversation with an invalid user."""
+
+        response = client.get(
+            "/api/chat/conversations/999/search?query=Python",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 404
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert data["message"] == "User not found."
+
+    def test_search_conversation_self(
+        self,
+        client,
+        auth_learner,
+    ):
+        """Test searching a conversation with self."""
+
+        response = client.get(
+            f"/api/chat/conversations/"
+            f"{auth_learner['user'].user_id}/search"
+            "?query=Python",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 400
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert data["message"] == (
+            "You cannot search a conversation with yourself."
+        )
+
+    def test_search_conversation_pagination(
+        self,
+        client,
+        database,
+        auth_learner,
+        sample_mentor,
+    ):
+        """Test pagination of conversation search results."""
+
+        messages = []
+
+        for index in range(5):
+            messages.append(
+                Message(
+                    sender_id=sample_mentor.user_id,
+                    receiver_id=auth_learner["user"].user_id,
+                    message=f"Python message {index + 1}",
+                    is_read=False,
+                )
+            )
+
+        database.session.add_all(messages)
+        database.session.commit()
+
+        response = client.get(
+            f"/api/chat/conversations/{sample_mentor.user_id}"
+            "/search?query=Python&page=1&per_page=2",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["status"] == "success"
+        assert len(data["data"]) == 2
+
+        assert data["pagination"]["page"] == 1
+        assert data["pagination"]["per_page"] == 2
+        assert data["pagination"]["total"] == 5
+        assert data["pagination"]["pages"] == 3
+        assert data["pagination"]["has_next"] is True
+        assert data["pagination"]["has_prev"] is False
+
+    def test_search_conversation_invalid_pagination(
+        self,
+        client,
+        auth_learner,
+        sample_mentor,
+    ):
+        """Test invalid pagination in conversation search."""
+
+        response = client.get(
+            f"/api/chat/conversations/{sample_mentor.user_id}"
+            "/search?query=Python&page=0&per_page=2",
+            headers=auth_learner["headers"],
+        )
+
+        assert response.status_code == 400
+
+        data = response.get_json()
+
+        assert data["status"] == "error"
+        assert data["message"] == (
+            "page must be greater than or equal to 1."
+        )

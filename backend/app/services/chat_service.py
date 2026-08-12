@@ -1,5 +1,5 @@
 from flask_jwt_extended import get_jwt_identity
-from sqlalchemy import and_, or_, func
+from sqlalchemy import and_, or_
 
 from app.extensions import db
 from app.models.message import Message
@@ -38,6 +38,7 @@ def _get_current_user():
     """Return the currently authenticated user."""
 
     user_id = int(get_jwt_identity())
+
     user = db.session.get(User, user_id)
 
     if not user:
@@ -53,6 +54,36 @@ def _validate_active_user(user):
         raise AuthorizationError(
             "Your account has been suspended. You cannot access chat."
         )
+
+
+def _validate_pagination(page, per_page):
+    """
+    Validate pagination parameters.
+
+    Returns:
+        tuple[int, int]
+    """
+
+    try:
+        page = int(page)
+        per_page = int(per_page)
+    except (ValueError, TypeError):
+        raise ValidationError(
+            "page and per_page must be valid integers."
+        )
+
+    if page < 1:
+        raise ValidationError("page must be greater than or equal to 1.")
+
+    if per_page < 1:
+        raise ValidationError(
+            "per_page must be greater than or equal to 1."
+        )
+
+    if per_page > 100:
+        raise ValidationError("per_page cannot exceed 100.")
+
+    return page, per_page
 
 
 def send_message_service(data):
@@ -128,13 +159,16 @@ def get_received_messages_service():
     Includes both read and unread messages.
     """
 
-    user = _get_current_user()
-    _validate_active_user(user)
+    current_user = _get_current_user()
+    _validate_active_user(current_user)
 
     messages = (
         Message.query
-        .filter(Message.receiver_id == user.user_id)
-        .order_by(Message.sent_at.desc())
+        .filter(Message.receiver_id == current_user.user_id)
+        .order_by(
+            Message.sent_at.desc(),
+            Message.message_id.desc(),
+        )
         .all()
     )
 
@@ -146,16 +180,19 @@ def get_unread_messages_service():
     Retrieves all unread messages received by the logged-in user.
     """
 
-    user = _get_current_user()
-    _validate_active_user(user)
+    current_user = _get_current_user()
+    _validate_active_user(current_user)
 
     messages = (
         Message.query
         .filter(
-            Message.receiver_id == user.user_id,
+            Message.receiver_id == current_user.user_id,
             Message.is_read.is_(False),
         )
-        .order_by(Message.sent_at.desc())
+        .order_by(
+            Message.sent_at.desc(),
+            Message.message_id.desc(),
+        )
         .all()
     )
 
@@ -167,35 +204,43 @@ def get_read_messages_service():
     Retrieves all read messages received by the logged-in user.
     """
 
-    user = _get_current_user()
-    _validate_active_user(user)
+    current_user = _get_current_user()
+    _validate_active_user(current_user)
 
     messages = (
         Message.query
         .filter(
-            Message.receiver_id == user.user_id,
+            Message.receiver_id == current_user.user_id,
             Message.is_read.is_(True),
         )
-        .order_by(Message.sent_at.desc())
+        .order_by(
+            Message.sent_at.desc(),
+            Message.message_id.desc(),
+        )
         .all()
     )
 
     return messages
 
 
-def get_conversation_service(user_id):
+def get_conversation_service(user_id, page=1, per_page=20):
     """
-    Retrieves the complete conversation history between the logged-in
-    user and another user.
+    Retrieves a paginated complete conversation history between
+    the logged-in user and another user.
 
     Both sent and received messages are returned.
-    Messages are NOT automatically marked as read.
+
+    Messages are ordered oldest to newest.
+
+    Reading the conversation does not modify read status.
     """
 
     try:
         other_user_id = int(user_id)
     except (ValueError, TypeError):
         raise ValidationError("user_id must be a valid integer.")
+
+    page, per_page = _validate_pagination(page, per_page)
 
     current_user = _get_current_user()
     _validate_active_user(current_user)
@@ -206,27 +251,98 @@ def get_conversation_service(user_id):
         raise ResourceNotFoundError("User not found.")
 
     if current_user.user_id == other_user.user_id:
-        raise ValidationError("You cannot view a conversation with yourself.")
-
-    conversation = (
-        Message.query
-        .filter(
-            or_(
-                and_(
-                    Message.sender_id == current_user.user_id,
-                    Message.receiver_id == other_user.user_id,
-                ),
-                and_(
-                    Message.sender_id == other_user.user_id,
-                    Message.receiver_id == current_user.user_id,
-                ),
-            )
+        raise ValidationError(
+            "You cannot view a conversation with yourself."
         )
-        .order_by(Message.sent_at.asc())
-        .all()
+
+    query = Message.query.filter(
+        or_(
+            and_(
+                Message.sender_id == current_user.user_id,
+                Message.receiver_id == other_user.user_id,
+            ),
+            and_(
+                Message.sender_id == other_user.user_id,
+                Message.receiver_id == current_user.user_id,
+            ),
+        )
+    ).order_by(
+        Message.sent_at.asc(),
+        Message.message_id.asc(),
     )
 
-    return conversation
+    pagination = query.paginate(
+        page=page,
+        per_page=per_page,
+        error_out=False,
+    )
+
+    return pagination
+
+
+def get_conversation_search_service(
+    user_id,
+    search,
+    page=1,
+    per_page=20,
+):
+    """
+    Searches message content within a specific conversation.
+
+    Both sent and received messages are searched.
+
+    Results are paginated and ordered newest to oldest.
+    """
+
+    try:
+        other_user_id = int(user_id)
+    except (ValueError, TypeError):
+        raise ValidationError("user_id must be a valid integer.")
+
+    page, per_page = _validate_pagination(page, per_page)
+
+    if not search or not search.strip():
+        raise ValidationError("Search query cannot be empty.")
+
+    search = search.strip()
+
+    current_user = _get_current_user()
+    _validate_active_user(current_user)
+
+    other_user = db.session.get(User, other_user_id)
+
+    if not other_user:
+        raise ResourceNotFoundError("User not found.")
+
+    if current_user.user_id == other_user.user_id:
+        raise ValidationError(
+            "You cannot search a conversation with yourself."
+        )
+
+    query = Message.query.filter(
+        or_(
+            and_(
+                Message.sender_id == current_user.user_id,
+                Message.receiver_id == other_user.user_id,
+            ),
+            and_(
+                Message.sender_id == other_user.user_id,
+                Message.receiver_id == current_user.user_id,
+            ),
+        ),
+        Message.message.ilike(f"%{search}%"),
+    ).order_by(
+        Message.sent_at.desc(),
+        Message.message_id.desc(),
+    )
+
+    pagination = query.paginate(
+        page=page,
+        per_page=per_page,
+        error_out=False,
+    )
+
+    return pagination
 
 
 def get_conversation_inbox_service(search=None):
@@ -259,9 +375,9 @@ def get_conversation_inbox_service(search=None):
             )
         )
         .order_by(
-                    Message.sent_at.desc(),
-                    Message.message_id.desc(),
-                )
+            Message.sent_at.desc(),
+            Message.message_id.desc(),
+        )
         .all()
     )
 
@@ -279,7 +395,10 @@ def get_conversation_inbox_service(search=None):
             if not other_user:
                 continue
 
-            if search and search.lower() not in other_user.full_name.lower():
+            if (
+                search
+                and search.lower() not in other_user.full_name.lower()
+            ):
                 continue
 
             conversations[other_user_id] = {
@@ -307,11 +426,11 @@ def get_conversation_inbox_service(search=None):
 
     return list(conversations.values())
 
+
 def search_messages_service(search):
     """
-    Searches messages belonging to the logged-in user's conversations.
-
-    Searches message text in both sent and received messages.
+    Searches message content across all conversations
+    of the logged-in user.
     """
 
     if not search or not search.strip():
@@ -331,7 +450,10 @@ def search_messages_service(search):
             ),
             Message.message.ilike(f"%{search}%"),
         )
-        .order_by(Message.sent_at.desc())
+        .order_by(
+            Message.sent_at.desc(),
+            Message.message_id.desc(),
+        )
         .all()
     )
 
@@ -362,6 +484,7 @@ def mark_message_read_service(message_id):
         )
 
     message.is_read = True
+
     db.session.commit()
 
     return message

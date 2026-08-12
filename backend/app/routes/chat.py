@@ -12,6 +12,7 @@ from app.services.chat_service import (
     get_conversation_service,
     get_conversation_inbox_service,
     search_messages_service,
+    get_conversation_search_service,
     mark_message_read_service,
     mark_conversation_read_service,
 )
@@ -38,6 +39,25 @@ def _serialize_message(message):
             if message.sent_at
             else None
         ),
+    }
+
+
+def _serialize_pagination(pagination):
+    """Return serialized paginated messages and pagination metadata."""
+
+    return {
+        "messages": [
+            _serialize_message(message)
+            for message in pagination.items
+        ],
+        "pagination": {
+            "page": pagination.page,
+            "per_page": pagination.per_page,
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "has_next": pagination.has_next,
+            "has_prev": pagination.has_prev,
+        },
     }
 
 
@@ -110,22 +130,24 @@ def get_received_messages():
     GET /api/chat/messages
 
     Retrieves all messages received by the logged-in user.
-    Includes both read and unread messages.
     """
 
     try:
         messages = get_received_messages_service()
 
-        return jsonify(
-            {
-                "status": "success",
-                "message": "Messages retrieved successfully",
-                "data": [
-                    _serialize_message(message)
-                    for message in messages
-                ],
-            }
-        ), 200
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "Messages retrieved successfully",
+                    "data": [
+                        _serialize_message(message)
+                        for message in messages
+                    ],
+                }
+            ),
+            200,
+        )
 
     except ResourceNotFoundError as err:
         return jsonify(
@@ -168,16 +190,19 @@ def get_unread_messages():
     try:
         messages = get_unread_messages_service()
 
-        return jsonify(
-            {
-                "status": "success",
-                "message": "Unread messages retrieved successfully",
-                "data": [
-                    _serialize_message(message)
-                    for message in messages
-                ],
-            }
-        ), 200
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "Unread messages retrieved successfully",
+                    "data": [
+                        _serialize_message(message)
+                        for message in messages
+                    ],
+                }
+            ),
+            200,
+        )
 
     except ResourceNotFoundError as err:
         return jsonify(
@@ -220,16 +245,19 @@ def get_read_messages():
     try:
         messages = get_read_messages_service()
 
-        return jsonify(
-            {
-                "status": "success",
-                "message": "Read messages retrieved successfully",
-                "data": [
-                    _serialize_message(message)
-                    for message in messages
-                ],
-            }
-        ), 200
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "Read messages retrieved successfully",
+                    "data": [
+                        _serialize_message(message)
+                        for message in messages
+                    ],
+                }
+            ),
+            200,
+        )
 
     except ResourceNotFoundError as err:
         return jsonify(
@@ -277,13 +305,18 @@ def get_conversation_inbox():
 
         conversations = get_conversation_inbox_service(search)
 
-        return jsonify(
-            {
-                "status": "success",
-                "message": "Conversation inbox retrieved successfully",
-                "data": conversations,
-            }
-        ), 200
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": (
+                        "Conversation inbox retrieved successfully"
+                    ),
+                    "data": conversations,
+                }
+            ),
+            200,
+        )
 
     except ValidationError as err:
         return jsonify(
@@ -322,31 +355,47 @@ def get_conversation_inbox():
         ), 500
 
 
-@chat_bp.route("/conversations/<int:user_id>", methods=["GET"])
+@chat_bp.route("/conversations/<int:user_id>/search", methods=["GET"])
 @jwt_required()
-def get_conversation(user_id):
+def search_conversation(user_id):
     """
-    GET /api/chat/conversations/<user_id>
+    GET /api/chat/conversations/<user_id>/search
 
-    Retrieves the complete conversation history between the
-    logged-in user and another user.
+    Searches message content within a specific conversation.
 
-    Messages are not automatically marked as read.
+    Query parameters:
+        query
+        page
+        per_page
     """
 
     try:
-        conversation = get_conversation_service(user_id)
+        search = request.args.get("query")
+        page = request.args.get("page", 1)
+        per_page = request.args.get("per_page", 20)
 
-        return jsonify(
-            {
-                "status": "success",
-                "message": "Conversation retrieved successfully",
-                "data": [
-                    _serialize_message(message)
-                    for message in conversation
-                ],
-            }
-        ), 200
+        pagination = get_conversation_search_service(
+            user_id=user_id,
+            search=search,
+            page=page,
+            per_page=per_page,
+        )
+
+        data = _serialize_pagination(pagination)
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": (
+                        "Conversation search completed successfully"
+                    ),
+                    "data": data["messages"],
+                    "pagination": data["pagination"],
+                }
+            ),
+            200,
+        )
 
     except ValidationError as err:
         return jsonify(
@@ -374,7 +423,7 @@ def get_conversation(user_id):
 
     except Exception as err:
         current_app.logger.exception(
-            f"Unexpected error in get_conversation: {str(err)}"
+            f"Unexpected error in search_conversation: {str(err)}"
         )
 
         return jsonify(
@@ -389,9 +438,12 @@ def get_conversation(user_id):
 @jwt_required()
 def search_messages():
     """
-    GET /api/chat/messages/search?query=hello
+    GET /api/chat/messages/search
 
-    Searches messages in the logged-in user's conversations.
+    Searches message content across all conversations.
+
+    Query parameter:
+        query
     """
 
     try:
@@ -399,16 +451,21 @@ def search_messages():
 
         messages = search_messages_service(search)
 
-        return jsonify(
-            {
-                "status": "success",
-                "message": "Messages search completed successfully",
-                "data": [
-                    _serialize_message(message)
-                    for message in messages
-                ],
-            }
-        ), 200
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": (
+                        "Messages search completed successfully"
+                    ),
+                    "data": [
+                        _serialize_message(message)
+                        for message in messages
+                    ],
+                }
+            ),
+            200,
+        )
 
     except ValidationError as err:
         return jsonify(
@@ -447,7 +504,84 @@ def search_messages():
         ), 500
 
 
-@chat_bp.route("/messages/<int:message_id>/read", methods=["PATCH"])
+@chat_bp.route("/conversations/<int:user_id>", methods=["GET"])
+@jwt_required()
+def get_conversation(user_id):
+    """
+    GET /api/chat/conversations/<user_id>
+
+    Retrieves paginated complete conversation history.
+
+    Query parameters:
+        page
+        per_page
+    """
+
+    try:
+        page = request.args.get("page", 1)
+        per_page = request.args.get("per_page", 20)
+
+        pagination = get_conversation_service(
+            user_id=user_id,
+            page=page,
+            per_page=per_page,
+        )
+
+        data = _serialize_pagination(pagination)
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "Conversation retrieved successfully",
+                    "data": data["messages"],
+                    "pagination": data["pagination"],
+                }
+            ),
+            200,
+        )
+
+    except ValidationError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 400
+
+    except ResourceNotFoundError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 404
+
+    except AuthorizationError as err:
+        return jsonify(
+            {
+                "status": "error",
+                "message": err.message,
+            }
+        ), 403
+
+    except Exception as err:
+        current_app.logger.exception(
+            f"Unexpected error in get_conversation: {str(err)}"
+        )
+
+        return jsonify(
+            {
+                "status": "error",
+                "message": "An unexpected error occurred.",
+            }
+        ), 500
+
+
+@chat_bp.route(
+    "/messages/<int:message_id>/read",
+    methods=["PATCH"],
+)
 @jwt_required()
 def mark_message_read(message_id):
     """
@@ -459,13 +593,16 @@ def mark_message_read(message_id):
     try:
         message = mark_message_read_service(message_id)
 
-        return jsonify(
-            {
-                "status": "success",
-                "message": "Message marked as read successfully",
-                "data": _serialize_message(message),
-            }
-        ), 200
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "Message marked as read successfully",
+                    "data": _serialize_message(message),
+                }
+            ),
+            200,
+        )
 
     except ValidationError as err:
         return jsonify(
@@ -519,15 +656,20 @@ def mark_conversation_read(user_id):
     try:
         messages = mark_conversation_read_service(user_id)
 
-        return jsonify(
-            {
-                "status": "success",
-                "message": "Conversation messages marked as read successfully",
-                "data": {
-                    "updated_count": len(messages),
-                },
-            }
-        ), 200
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": (
+                        "Conversation messages marked as read successfully"
+                    ),
+                    "data": {
+                        "updated_count": len(messages),
+                    },
+                }
+            ),
+            200,
+        )
 
     except ValidationError as err:
         return jsonify(
