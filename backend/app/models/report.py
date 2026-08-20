@@ -8,7 +8,17 @@ class Report(db.Model):
 
     report_id = db.Column(db.Integer, primary_key=True)
 
-    reported_by = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False)
+    review_id = db.Column(
+        db.Integer,
+        db.ForeignKey("reviews.review_id"),
+        nullable=False
+    )
+
+    reported_by = db.Column(
+        db.Integer,
+        db.ForeignKey("users.user_id"),
+        nullable=False
+    )
 
     reported_user = db.Column(
         db.Integer, db.ForeignKey("users.user_id"), nullable=False

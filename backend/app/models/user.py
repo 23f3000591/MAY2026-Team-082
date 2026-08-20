@@ -32,6 +32,8 @@ class User(db.Model):
 
     is_verified = db.Column(db.Boolean, default=False, nullable=False)
 
+    is_suspended = db.Column(db.Boolean, default=False, nullable=False)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     updated_at = db.Column(
