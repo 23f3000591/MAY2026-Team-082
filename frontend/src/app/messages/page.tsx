@@ -1,78 +1,117 @@
 "use client";
 
 import { SiteShell } from "@/components/layout/site-shell";
-import { useAppStore } from "@/lib/store";
+import { apiClient } from "@/lib/api-client";
 import { SendHorizonal, MessageSquareMore } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { useAppStore } from "@/lib/store";
+
+interface ConversationSummary {
+  other_user_id: number;
+  other_user_name: string;
+  last_message: string;
+  last_message_at: string | null;
+  unread_count: number;
+}
+
+interface ChatMessage {
+  message_id: number;
+  sender_id: number;
+  receiver_id: number;
+  message: string;
+  is_read: boolean;
+  sent_at: string | null;
+}
 
 export default function MessagesPage() {
   const currentUser = useAppStore((state) => state.currentUser);
-  const users = useAppStore((state) => state.users);
-  const messages = useAppStore((state) => state.messages);
-  const sendMessage = useAppStore((state) => state.sendMessage);
-  const markMessageRead = useAppStore((state) => state.markMessageRead);
 
-  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [threadMessages, setThreadMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [loadingInbox, setLoadingInbox] = useState(true);
+  const [loadingThread, setLoadingThread] = useState(false);
 
-  const contacts = useMemo(() => {
-    if (!currentUser) return [];
+  // Fetch conversation inbox on mount
+  useEffect(() => {
+    async function fetchInbox() {
+      setLoadingInbox(true);
+      try {
+        const res = await apiClient.getConversationInbox();
+        const data: ConversationSummary[] = res.data ?? [];
+        setConversations(data);
+        if (data.length > 0 && selectedUserId === null) {
+          setSelectedUserId(data[0].other_user_id);
+        }
+      } catch {
+        // silently fail
+      } finally {
+        setLoadingInbox(false);
+      }
+    }
+    fetchInbox();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    const uniqueIds = new Set<string>();
-    messages.forEach((message) => {
-      if (message.fromId === currentUser.id) uniqueIds.add(message.toId);
-      if (message.toId === currentUser.id) uniqueIds.add(message.fromId);
-    });
-
-    return [...uniqueIds]
-      .map((id) => users.find((user) => user.id === id))
-      .filter((user): user is NonNullable<typeof user> => Boolean(user));
-  }, [currentUser, messages, users]);
+  // Fetch thread when selected user changes
+  const fetchThread = useCallback(async (userId: number) => {
+    setLoadingThread(true);
+    try {
+      const res = await apiClient.getConversation(userId);
+      setThreadMessages(res.data ?? []);
+      // Mark conversation as read
+      await apiClient.markConversationRead(userId).catch(() => {});
+      // Update unread count in sidebar
+      setConversations((prev) =>
+        prev.map((c) => (c.other_user_id === userId ? { ...c, unread_count: 0 } : c))
+      );
+    } catch {
+      setThreadMessages([]);
+    } finally {
+      setLoadingThread(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!contacts.length) {
-      setSelectedContactId(null);
-      return;
+    if (selectedUserId !== null) {
+      fetchThread(selectedUserId);
     }
+  }, [selectedUserId, fetchThread]);
 
-    if (!selectedContactId || !contacts.some((contact) => contact.id === selectedContactId)) {
-      setSelectedContactId(contacts[0].id);
-    }
-  }, [contacts, selectedContactId]);
-
-  useEffect(() => {
-    if (!currentUser || !selectedContactId) return;
-
-    messages
-      .filter((message) => message.fromId === selectedContactId && message.toId === currentUser.id && !message.read)
-      .forEach((message) => markMessageRead(message.id));
-  }, [currentUser, selectedContactId, messages, markMessageRead]);
-
-  const selectedContact = contacts.find((contact) => contact.id === selectedContactId) ?? null;
-
-  const threadMessages = useMemo(() => {
-    if (!currentUser || !selectedContactId) return [];
-
-    return messages
-      .filter(
-        (message) =>
-          (message.fromId === currentUser.id && message.toId === selectedContactId) ||
-          (message.fromId === selectedContactId && message.toId === currentUser.id)
-      )
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-  }, [currentUser, selectedContactId, messages]);
-
-  const handleSend = () => {
-    if (!currentUser || !selectedContactId || !draft.trim()) return;
-
-    sendMessage({
-      fromId: currentUser.id,
-      toId: selectedContactId,
-      content: draft.trim(),
-    });
-
+  const handleSend = async () => {
+    if (!selectedUserId || !draft.trim()) return;
+    const text = draft.trim();
     setDraft("");
+    try {
+      const res = await apiClient.sendChatMessage({
+        receiver_id: selectedUserId,
+        message: text,
+      });
+      const newMsg: ChatMessage = res.data;
+      setThreadMessages((prev) => [...prev, newMsg]);
+      // Update last message preview in sidebar
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.other_user_id === selectedUserId
+            ? { ...c, last_message: text, last_message_at: new Date().toISOString() }
+            : c
+        )
+      );
+    } catch {
+      // restore draft on error
+      setDraft(text);
+    }
   };
+
+  const selectedContact = useMemo(
+    () => conversations.find((c) => c.other_user_id === selectedUserId) ?? null,
+    [conversations, selectedUserId]
+  );
+
+  const currentUserId = currentUser
+    ? (currentUser as any).user_id ?? (currentUser as any).id
+    : null;
 
   return (
     <SiteShell>
@@ -97,55 +136,45 @@ export default function MessagesPage() {
               </div>
 
               <div className="space-y-3">
-                {contacts.map((contact) => {
-                  const latestMessage = [...messages]
-                    .reverse()
-                    .find(
-                      (message) =>
-                        (message.fromId === contact.id && message.toId === currentUser.id) ||
-                        (message.fromId === currentUser.id && message.toId === contact.id)
-                    );
-
-                  const unreadCount = messages.filter(
-                    (message) => message.fromId === contact.id && message.toId === currentUser.id && !message.read
-                  ).length;
-
-                  return (
+                {loadingInbox ? (
+                  <div className="rounded-[1.25rem] border border-white/10 bg-slate-950/30 p-4 text-sm text-slate-400">
+                    Loading conversations…
+                  </div>
+                ) : conversations.length === 0 ? (
+                  <div className="rounded-[1.25rem] border border-dashed border-white/10 bg-slate-950/20 p-4 text-sm text-slate-400">
+                    No chats yet. Start by messaging a mentor.
+                  </div>
+                ) : (
+                  conversations.map((contact) => (
                     <button
-                      key={contact.id}
+                      key={contact.other_user_id}
                       type="button"
-                      onClick={() => setSelectedContactId(contact.id)}
+                      onClick={() => setSelectedUserId(contact.other_user_id)}
                       className={`flex w-full items-center gap-3 rounded-[1.25rem] border p-3 text-left transition ${
-                        selectedContactId === contact.id
+                        selectedUserId === contact.other_user_id
                           ? "border-cyan-400/30 bg-cyan-400/10"
                           : "border-transparent bg-slate-950/30 hover:border-white/10 hover:bg-slate-950/40"
                       }`}
                     >
                       <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-slate-800 text-sm font-semibold text-white">
-                        {contact.name.charAt(0)}
+                        {contact.other_user_name.charAt(0)}
                       </div>
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="truncate font-medium text-white">{contact.name}</span>
-                          {unreadCount > 0 && (
+                          <span className="truncate font-medium text-white">{contact.other_user_name}</span>
+                          {contact.unread_count > 0 && (
                             <span className="rounded-full bg-cyan-400 px-2 py-0.5 text-[10px] font-semibold text-slate-900">
-                              {unreadCount}
+                              {contact.unread_count}
                             </span>
                           )}
                         </div>
                         <p className="truncate text-sm text-slate-400">
-                          {latestMessage ? latestMessage.content : "Start a conversation"}
+                          {contact.last_message || "Start a conversation"}
                         </p>
                       </div>
                     </button>
-                  );
-                })}
-
-                {!contacts.length && (
-                  <div className="rounded-[1.25rem] border border-dashed border-white/10 bg-slate-950/20 p-4 text-sm text-slate-400">
-                    No chats yet. Start by messaging a mentor.
-                  </div>
+                  ))
                 )}
               </div>
             </aside>
@@ -155,22 +184,24 @@ export default function MessagesPage() {
                 <>
                   <div className="flex items-center gap-4 border-b border-white/10 p-5">
                     <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-slate-800 text-sm font-semibold text-white">
-                      {selectedContact.name.charAt(0)}
+                      {selectedContact.other_user_name.charAt(0)}
                     </div>
                     <div>
-                      <h3 className="text-xl font-semibold text-white">{selectedContact.name}</h3>
-                      <p className="text-sm text-emerald-400">Online</p>
+                      <h3 className="text-xl font-semibold text-white">{selectedContact.other_user_name}</h3>
                     </div>
                   </div>
 
                   <div className="flex-1 space-y-4 overflow-y-auto p-5">
-                    {threadMessages.length ? (
-                      threadMessages.map((message) => {
-                        const isFromCurrentUser = message.fromId === currentUser.id;
-
+                    {loadingThread ? (
+                      <div className="flex h-full items-center justify-center text-slate-400">
+                        Loading messages…
+                      </div>
+                    ) : threadMessages.length ? (
+                      threadMessages.map((msg) => {
+                        const isFromCurrentUser = currentUserId !== null && msg.sender_id === currentUserId;
                         return (
                           <div
-                            key={message.id}
+                            key={msg.message_id}
                             className={`flex ${isFromCurrentUser ? "justify-end" : "justify-start"}`}
                           >
                             <div
@@ -180,13 +211,13 @@ export default function MessagesPage() {
                                   : "bg-slate-800/90 text-white"
                               }`}
                             >
-                              <div className="text-sm leading-relaxed">{message.content}</div>
+                              <div className="text-sm leading-relaxed">{msg.message}</div>
                               <div
                                 className={`mt-2 text-[10px] ${
                                   isFromCurrentUser ? "text-slate-800/70" : "text-slate-400"
                                 }`}
                               >
-                                {new Date(message.createdAt).toLocaleString()}
+                                {msg.sent_at ? new Date(msg.sent_at).toLocaleString() : ""}
                               </div>
                             </div>
                           </div>
@@ -210,7 +241,7 @@ export default function MessagesPage() {
                             handleSend();
                           }
                         }}
-                        placeholder={`Message ${selectedContact.name}...`}
+                        placeholder={`Message ${selectedContact.other_user_name}...`}
                         className="flex-1 bg-transparent px-3 py-2 text-white placeholder:text-slate-500 focus:outline-none"
                       />
                       <button

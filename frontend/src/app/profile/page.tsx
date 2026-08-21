@@ -4,6 +4,7 @@ import { BadgeCheck, Camera, Plus, Sparkles, Star, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { SiteShell } from "@/components/layout/site-shell";
 import { SkillEntry, SkillLevel, useAppStore } from "@/lib/store";
+import { apiClient } from "@/lib/api-client";
 
 export default function ProfilePage() {
   const currentUser = useAppStore((state) => state.currentUser);
@@ -28,19 +29,25 @@ export default function ProfilePage() {
     setSkills(currentUser.skills ?? []);
   }, [currentUser]);
 
-  const saveProfile = () => {
+  const saveProfile = async () => {
     if (!currentUser) return;
-    updateUserProfile(currentUser.id, {
-      name,
-      bio,
-      location,
-      yearsExperience,
-      skills,
-    });
-    setMessage("Profile updated successfully.");
+    // Update local store
+    updateUserProfile(currentUser.id, { name, bio, location, yearsExperience, skills });
+    // Persist to backend
+    try {
+      await apiClient.editProfile({
+        full_name: name,
+        bio,
+        location,
+        years_of_experience: yearsExperience,
+      });
+      setMessage("Profile updated successfully.");
+    } catch (err: any) {
+      setMessage(err?.response?.data?.message ?? "Profile saved locally but failed to sync with server.");
+    }
   };
 
-  const addSkill = () => {
+  const addSkill = async () => {
     if (!newSkillName.trim()) return;
     const skill: SkillEntry = {
       id: `${newSkillName.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`,
@@ -54,6 +61,17 @@ export default function ProfilePage() {
     setNewSkillLevel("Beginner");
     setNewSkillYears(0);
     setNewSkillDescription("");
+    // Persist to backend — skill_id uses the skill name as a string identifier
+    try {
+      await apiClient.addSkill({
+        skill_id: newSkillName,
+        experience_level: newSkillLevel,
+        years_of_experience: newSkillYears,
+        description: newSkillDescription,
+      });
+    } catch {
+      // Skill added locally even if backend call fails
+    }
   };
 
   const removeSkill = (skillId: string) => {

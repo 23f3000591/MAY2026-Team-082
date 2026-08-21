@@ -37,19 +37,38 @@ class FavoriteService:
             if mentor_id <= 0:
                 raise ValueError()
         except (ValueError, TypeError):
-            raise ValidationError("Invalid mentor ID", status_code=400)
-
-        mentor = (
-            db.session.query(User)
-            .filter(
-                User.user_id == mentor_id,
-                or_(
-                    func.lower(User.role) == "mentor",
-                    User.is_mentor.is_(True),
-                ),
+            # If mentor_id_raw is a string identifier/slug, attempt to find mentor by matching full_name or user_id
+            mentor = (
+                db.session.query(User)
+                .filter(
+                    or_(
+                        func.lower(User.full_name) == str(mentor_id_raw).replace("-", " ").lower(),
+                        func.lower(User.email).like(f"{str(mentor_id_raw).lower()}%"),
+                    ),
+                    or_(
+                        func.lower(User.role) == "mentor",
+                        User.is_mentor.is_(True),
+                    ),
+                )
+                .first()
             )
-            .first()
-        )
+            if mentor:
+                mentor_id = mentor.user_id
+            else:
+                raise ValidationError("Invalid mentor ID", status_code=400)
+
+        if "mentor" not in locals() or not mentor:
+            mentor = (
+                db.session.query(User)
+                .filter(
+                    User.user_id == mentor_id,
+                    or_(
+                        func.lower(User.role) == "mentor",
+                        User.is_mentor.is_(True),
+                    ),
+                )
+                .first()
+            )
 
         if not mentor:
             raise NotFoundError("Mentor not found", status_code=404)
@@ -85,19 +104,37 @@ class FavoriteService:
             if mentor_id <= 0:
                 raise ValueError()
         except (ValueError, TypeError):
-            raise ValidationError("Invalid mentor ID", status_code=400)
-
-        mentor = (
-            db.session.query(User)
-            .filter(
-                User.user_id == mentor_id,
-                or_(
-                    func.lower(User.role) == "mentor",
-                    User.is_mentor.is_(True),
-                ),
+            mentor = (
+                db.session.query(User)
+                .filter(
+                    or_(
+                        func.lower(User.full_name) == str(mentor_id_raw).replace("-", " ").lower(),
+                        func.lower(User.email).like(f"{str(mentor_id_raw).lower()}%"),
+                    ),
+                    or_(
+                        func.lower(User.role) == "mentor",
+                        User.is_mentor.is_(True),
+                    ),
+                )
+                .first()
             )
-            .first()
-        )
+            if mentor:
+                mentor_id = mentor.user_id
+            else:
+                raise ValidationError("Invalid mentor ID", status_code=400)
+
+        if "mentor" not in locals() or not mentor:
+            mentor = (
+                db.session.query(User)
+                .filter(
+                    User.user_id == mentor_id,
+                    or_(
+                        func.lower(User.role) == "mentor",
+                        User.is_mentor.is_(True),
+                    ),
+                )
+                .first()
+            )
 
         if not mentor:
             raise NotFoundError("Mentor not found", status_code=404)

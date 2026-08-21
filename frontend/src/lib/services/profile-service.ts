@@ -83,9 +83,9 @@ class ProfileService {
     }
   }
 
-  async uploadProfilePicture(file: File): Promise<any> {
+  async uploadProfilePicture(profilePictureUrl: string): Promise<any> {
     try {
-      const response = await apiClient.uploadProfilePicture(file);
+      const response = await apiClient.uploadProfilePicture(profilePictureUrl);
       return response;
     } catch (error) {
       console.error("Error uploading profile picture:", error);

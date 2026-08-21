@@ -39,7 +39,7 @@ export function HeroSection() {
               <Link href="/auth/login">Join the community <ArrowRight className="h-4 w-4" /></Link>
             </Button>
             <Button asChild variant="secondary" size="lg">
-              <Link href="/auth/login"><PlayCircle className="h-4 w-4" /> Watch demo</Link>
+              <Link href="/search"><PlayCircle className="h-4 w-4" /> Explore platform</Link>
             </Button>
           </div>
           <div className="flex flex-wrap gap-6 text-sm text-[var(--text-secondary)]">

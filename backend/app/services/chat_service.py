@@ -112,13 +112,24 @@ def send_message_service(data):
 
     try:
         receiver_id = int(receiver_id)
+        receiver = db.session.get(User, receiver_id)
     except (ValueError, TypeError):
-        raise ValidationError("receiver_id must be a valid integer.")
+        from sqlalchemy import or_, func
+        receiver = (
+            db.session.query(User)
+            .filter(
+                or_(
+                    func.lower(User.full_name) == str(receiver_id).replace("-", " ").lower(),
+                    func.lower(User.email).like(f"{str(receiver_id).lower()}%"),
+                )
+            )
+            .first()
+        )
+        if not receiver:
+            raise ValidationError("receiver_id must be a valid integer or user identifier.")
 
     sender = _get_current_user()
     _validate_active_user(sender)
-
-    receiver = db.session.get(User, receiver_id)
 
     if not receiver:
         raise ResourceNotFoundError("Receiver not found.")

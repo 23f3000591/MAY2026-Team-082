@@ -93,7 +93,7 @@ class ApiClient {
   }
 
   async requestPasswordReset(email: string) {
-    const response = await this.client.post('/auth/request-password-reset', { email });
+    const response = await this.client.post('/auth/forgot-password', { email });
     return response.data;
   }
 
@@ -125,7 +125,7 @@ class ApiClient {
   }
 
   async editProfile(data: any) {
-    const response = await this.client.put('/profile', data);
+    const response = await this.client.put('/profile/', data);
     return response.data;
   }
 
@@ -139,11 +139,10 @@ class ApiClient {
     return response.data;
   }
 
-  async uploadProfilePicture(file: File) {
-    const formData = new FormData();
-    formData.append('profile_picture', file);
-    const response = await this.client.post('/profile/upload-picture', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+  // Fixed: backend uses PUT /profile/picture with JSON body (not multipart POST)
+  async uploadProfilePicture(profilePictureUrl: string) {
+    const response = await this.client.put('/profile/picture', {
+      profile_picture_url: profilePictureUrl,
     });
     return response.data;
   }
@@ -155,6 +154,11 @@ class ApiClient {
 
   async getMentorProfile(mentorId: string) {
     const response = await this.client.get(`/profile/mentor/${mentorId}`);
+    return response.data;
+  }
+
+  async getLearnerProfileById(userId: string | number) {
+    const response = await this.client.get(`/profile/learner/${userId}`);
     return response.data;
   }
 
@@ -218,7 +222,7 @@ class ApiClient {
     location?: string;
     learner_note?: string;
   }) {
-    const response = await this.client.post('/sessions', data);
+    const response = await this.client.post('/sessions/', data);
     return response.data;
   }
 
@@ -255,7 +259,7 @@ class ApiClient {
     start_time: string;
     end_time: string;
   }) {
-    const response = await this.client.post('/availability', data);
+    const response = await this.client.post('/availability/', data);
     return response.data;
   }
 
@@ -269,8 +273,150 @@ class ApiClient {
     return response.data;
   }
 
+  // Fixed: backend route is /availability/mentor/<id>, not /mentors/<id>/availability
   async getMentorAvailability(mentorId: string) {
-    const response = await this.client.get(`/mentors/${mentorId}/availability`);
+    const response = await this.client.get(`/availability/mentor/${mentorId}`);
+    return response.data;
+  }
+
+  // ============= CHAT ENDPOINTS =============
+  async sendChatMessage(data: { receiver_id: number | string; message: string }) {
+    const response = await this.client.post('/chat/messages', data);
+    return response.data;
+  }
+
+  async getReceivedMessages() {
+    const response = await this.client.get('/chat/messages');
+    return response.data;
+  }
+
+  async getUnreadMessages() {
+    const response = await this.client.get('/chat/messages/unread');
+    return response.data;
+  }
+
+  async getReadMessages() {
+    const response = await this.client.get('/chat/messages/read');
+    return response.data;
+  }
+
+  async getConversationInbox(search?: string) {
+    const response = await this.client.get('/chat/conversations', {
+      params: search ? { search } : undefined,
+    });
+    return response.data;
+  }
+
+  async getConversation(userId: number | string, page = 1, perPage = 20) {
+    const response = await this.client.get(`/chat/conversations/${userId}`, {
+      params: { page, per_page: perPage },
+    });
+    return response.data;
+  }
+
+  async searchMessages(query: string) {
+    const response = await this.client.get('/chat/messages/search', {
+      params: { query },
+    });
+    return response.data;
+  }
+
+  async searchConversation(userId: number | string, query: string, page = 1, perPage = 20) {
+    const response = await this.client.get(`/chat/conversations/${userId}/search`, {
+      params: { query, page, per_page: perPage },
+    });
+    return response.data;
+  }
+
+  async markMessageRead(messageId: number | string) {
+    const response = await this.client.patch(`/chat/messages/${messageId}/read`);
+    return response.data;
+  }
+
+  async markConversationRead(userId: number | string) {
+    const response = await this.client.patch(`/chat/conversations/${userId}/read`);
+    return response.data;
+  }
+
+  // ============= NOTIFICATION ENDPOINTS =============
+  async getNotifications() {
+    const response = await this.client.get('/notifications/');
+    return response.data;
+  }
+
+  async markNotificationRead(notificationId: number | string) {
+    const response = await this.client.put(`/notifications/${notificationId}/read`);
+    return response.data;
+  }
+
+  // ============= REVIEW ENDPOINTS =============
+  async submitReview(data: {
+    session_id: number | string;
+    mentor_id: number | string;
+    rating: number;
+    review_text?: string;
+  }) {
+    const response = await this.client.post('/reviews/', data);
+    return response.data;
+  }
+
+  async getMentorReviews(mentorId: number | string) {
+    const response = await this.client.get(`/reviews/mentor/${mentorId}`);
+    return response.data;
+  }
+
+  async reportReview(reviewId: number | string, data: { reason?: string; description?: string }) {
+    const response = await this.client.post(`/reviews/${reviewId}/report`, data);
+    return response.data;
+  }
+
+  // ============= ADMIN ENDPOINTS =============
+  async getAdminUsers(params?: { search?: string; role?: string }) {
+    const response = await this.client.get('/admin/users', { params });
+    return response.data;
+  }
+
+  async getAdminUserDetails(userId: number | string) {
+    const response = await this.client.get(`/admin/users/${userId}`);
+    return response.data;
+  }
+
+  async suspendUser(userId: number | string, isSuspended: boolean) {
+    const response = await this.client.patch(`/admin/users/${userId}/suspend`, {
+      is_suspended: isSuspended,
+    });
+    return response.data;
+  }
+
+  async verifyMentor(userId: number | string, isVerified: boolean) {
+    const response = await this.client.patch(`/admin/mentors/${userId}/verify`, {
+      is_verified: isVerified,
+    });
+    return response.data;
+  }
+
+  async getAdminReports(params?: { status?: string }) {
+    const response = await this.client.get('/admin/reports', { params });
+    return response.data;
+  }
+
+  async getAdminReportDetails(reportId: number | string) {
+    const response = await this.client.get(`/admin/reports/${reportId}`);
+    return response.data;
+  }
+
+  async resolveReport(reportId: number | string, data?: { description?: string }) {
+    const response = await this.client.patch(`/admin/reports/${reportId}/resolve`, data ?? {});
+    return response.data;
+  }
+
+  async dismissReport(reportId: number | string, data?: { description?: string }) {
+    const response = await this.client.patch(`/admin/reports/${reportId}/dismiss`, data ?? {});
+    return response.data;
+  }
+
+  async getPlatformActivity() {
+    const response = await this.client.get('/admin/activity');
     return response.data;
   }
 

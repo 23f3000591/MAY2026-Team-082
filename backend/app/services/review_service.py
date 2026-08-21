@@ -137,12 +137,28 @@ def get_mentor_reviews_service(mentor_id):
 
     try:
         mentor_id = int(mentor_id)
+        mentor = db.session.get(User, mentor_id)
     except (ValueError, TypeError):
-        raise ValidationError("mentor_id must be a valid integer.")
+        from sqlalchemy import or_, func
+        mentor = (
+            db.session.query(User)
+            .filter(
+                or_(
+                    func.lower(User.full_name) == str(mentor_id).replace("-", " ").lower(),
+                    func.lower(User.email).like(f"{str(mentor_id).lower()}%"),
+                ),
+                or_(
+                    func.lower(User.role) == "mentor",
+                    User.is_mentor.is_(True),
+                ),
+            )
+            .first()
+        )
+        if not mentor:
+            raise ValidationError("mentor_id must be a valid integer or mentor identifier.")
+        mentor_id = mentor.user_id
 
-    mentor = db.session.get(User, mentor_id)
-
-    if mentor is None or not mentor.is_mentor:
+    if mentor is None or not (mentor.is_mentor or mentor.role.lower() == "mentor"):
         raise NotFoundError("Mentor not found.")
 
     reviews = (

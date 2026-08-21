@@ -7,6 +7,17 @@ import { ArrowLeft, Heart, MessageSquare, Star, AlertCircle } from "lucide-react
 import { SiteShell } from "@/components/layout/site-shell";
 import { useAppStore } from "@/lib/store";
 import { mentorService } from "@/lib/services/mentor-service";
+import { apiClient } from "@/lib/api-client";
+
+interface BackendReview {
+  review_id: number;
+  session_id: number;
+  learner_id: number;
+  mentor_id: number;
+  rating: number;
+  review_text: string | null;
+  created_at: string | null;
+}
 
 export default function MentorDetailPage() {
   const params = useParams();
@@ -14,20 +25,55 @@ export default function MentorDetailPage() {
   const addFavoriteMentor = useAppStore((state) => state.addFavoriteMentor);
   const removeFavoriteMentor = useAppStore((state) => state.removeFavoriteMentor);
   const addBooking = useAppStore((state) => state.addBooking);
-  const sendMessage = useAppStore((state) => state.sendMessage);
   const currentUser = useAppStore((state) => state.currentUser);
   const users = useAppStore((state) => state.users);
-  const reviews = useAppStore((state) => state.reviews);
-  const addReview = useAppStore((state) => state.addReview);
   const [message, setMessage] = useState("");
   const [composeMessage, setComposeMessage] = useState("");
   const [sessionMode, setSessionMode] = useState<"Online" | "In-person" | "Hybrid">("Online");
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
   const [isAddingFavorite, setIsAddingFavorite] = useState(false);
+  const [backendReviews, setBackendReviews] = useState<BackendReview[]>([]);
+  const [apiMentor, setApiMentor] = useState<any>(null);
   const mentorId = typeof params?.id === "string" ? params.id : "";
   const isFavorite = currentUser?.favorites?.includes(mentorId) ?? false;
+
+  // Fetch real reviews & mentor details from backend
+  useEffect(() => {
+    if (!mentorId) return;
+    apiClient.getMentorReviews(mentorId).then((res) => {
+      setBackendReviews(res.data ?? []);
+    }).catch(() => {});
+
+    mentorService.getDetails(mentorId).then((res: any) => {
+      if (res) {
+        const data = res.data || res;
+        setApiMentor({
+          id: String(data.id || data.user_id || mentorId),
+          name: data.name || data.full_name,
+          role: "mentor",
+          location: data.location || "Remote",
+          experience: `${data.years_of_experience || data.yearsExperience || 0} years`,
+          rating: data.rating ?? 4.5,
+          reviews: data.review_count ?? data.reviews ?? 0,
+          price: "Flexible",
+          bio: data.bio || "Experienced mentor helping learners grow confidently.",
+          skills: Array.isArray(data.skills)
+            ? data.skills.map((s: any) => typeof s === "string" ? { name: s } : s)
+            : [],
+          availability: Array.isArray(data.availability) && data.availability.length > 0
+            ? data.availability.map((a: any) => typeof a === "string" ? { day: a, label: a } : a)
+            : [
+                { day: "Flexible", label: "By appointment" },
+                { day: "Availability", label: "Check calendar for open slots" },
+              ],
+        });
+      }
+    }).catch(() => {});
+  }, [mentorId]);
+
   const mentor = useMemo(() => {
+    if (apiMentor) return apiMentor;
     const mentorUser = users.find((item) => item.id === mentorId && item.role === "mentor");
     if (!mentorUser) return null;
 
@@ -47,26 +93,30 @@ export default function MentorDetailPage() {
         { day: "Availability", label: "Check calendar for open slots" },
       ],
     };
-  }, [mentorId, users]);
+  }, [mentorId, users, apiMentor]);
 
-  const mentorReviews = useMemo(() => reviews.filter((review) => review.mentorId === mentorId), [reviews, mentorId]);
+  const mentorReviews = backendReviews;
   const exemplar = mentorReviews.length ? mentorReviews[0] : null;
 
-  const handleSubmitReview = () => {
+  const handleSubmitReview = async () => {
     if (!currentUser || !reviewComment.trim() || reviewRating < 1) {
       setMessage("Please add a rating and comment before submitting.");
       return;
     }
-    addReview({
-      mentorId,
-      learnerId: currentUser.id,
-      bookingId: null,
-      rating: reviewRating,
-      comment: reviewComment.trim(),
-    });
-    setReviewComment("");
-    setReviewRating(5);
-    setMessage("Review submitted successfully.");
+    try {
+      const res = await apiClient.submitReview({
+        session_id: 0, // no specific session context from this page
+        mentor_id: mentorId,
+        rating: reviewRating,
+        review_text: reviewComment.trim(),
+      });
+      setBackendReviews((prev) => [res.data, ...prev]);
+      setReviewComment("");
+      setReviewRating(5);
+      setMessage("Review submitted successfully.");
+    } catch (err: any) {
+      setMessage(err?.response?.data?.message ?? "Failed to submit review.");
+    }
   };
 
   const handleRequestSession = () => {
@@ -90,16 +140,16 @@ export default function MentorDetailPage() {
       note: `Requested via mentor profile.`,
     });
 
-    sendMessage({
-      fromId: currentUser.id,
-      toId: mentor.id,
-      content: `Hi ${mentor.name}, I'd like to request a ${sessionMode.toLowerCase()} session with you.`,
-    });
+    // Also send a real chat message to the mentor
+    apiClient.sendChatMessage({
+      receiver_id: mentor.id,
+      message: `Hi ${mentor.name}, I'd like to request a ${sessionMode.toLowerCase()} session with you.`,
+    }).catch(() => {});
 
     setMessage("Request submitted — you can now message the mentor.");
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!currentUser) {
       setMessage("Please log in to send a message.");
       return;
@@ -113,13 +163,16 @@ export default function MentorDetailPage() {
       return;
     }
 
-    sendMessage({
-      fromId: currentUser.id,
-      toId: mentor.id,
-      content: composeMessage.trim(),
-    });
-    setComposeMessage("");
-    setMessage("Message sent.");
+    try {
+      await apiClient.sendChatMessage({
+        receiver_id: mentor.id,
+        message: composeMessage.trim(),
+      });
+      setComposeMessage("");
+      setMessage("Message sent.");
+    } catch (err: any) {
+      setMessage(err?.response?.data?.message ?? "Failed to send message.");
+    }
   };
 
   const handleAddFavorite = async () => {
@@ -184,8 +237,8 @@ export default function MentorDetailPage() {
                 </div>
               </div>
               <div className="mt-6 flex flex-wrap gap-3">
-                {mentor.skills.map((skill) => (
-                  <span key={skill.name} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-300">{skill.name}</span>
+                {mentor.skills.map((skill: any) => (
+                  <span key={skill.name || skill} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-300">{skill.name || skill}</span>
                 ))}
               </div>
               <div className="mt-6 text-slate-300">{mentor.bio}</div>
@@ -243,10 +296,10 @@ export default function MentorDetailPage() {
             <div className="text-sm text-slate-400">Select a day and time to book</div>
           </div>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            {mentor.availability.map((slot) => (
-              <div key={slot.label} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div className="font-semibold text-white">{slot.day}</div>
-                <div className="mt-1 text-sm text-slate-400">{slot.label}</div>
+            {mentor.availability.map((slot: any) => (
+              <div key={slot.label || slot.day || slot} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div className="font-semibold text-white">{slot.day || slot}</div>
+                <div className="mt-1 text-sm text-slate-400">{slot.label || slot.day || slot}</div>
               </div>
             ))}
           </div>
@@ -266,15 +319,15 @@ export default function MentorDetailPage() {
           <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_0.8fr]">
             <div className="space-y-4">
               {mentorReviews.length ? mentorReviews.map((review) => (
-                <div key={review.id} className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                <div key={review.review_id} className="rounded-2xl border border-white/10 bg-white/5 p-5">
                   <div className="flex items-center gap-3">
                     <Star className="h-4 w-4 text-cyan-300" />
                     <div className="font-semibold text-white">{review.rating}/5</div>
                   </div>
-                  <div className="mt-3 text-slate-300">{review.comment}</div>
+                  <div className="mt-3 text-slate-300">{review.review_text ?? ""}</div>
                 </div>
               )) : <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-slate-300">No reviews yet.</div>}
-              {exemplar ? <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm text-cyan-200">Featured review: "{exemplar.comment}"</div> : null}
+              {exemplar ? <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm text-cyan-200">Featured review: "{exemplar.review_text}"</div> : null}
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-6">

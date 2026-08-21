@@ -2,25 +2,31 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, Mail, Sparkles } from "lucide-react";
+import { Mail, Sparkles } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { useAppStore } from "@/lib/store";
+import { apiClient } from "@/lib/api-client";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
-  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const requestPasswordReset = useAppStore((state) => state.requestPasswordReset);
+  const [isError, setIsError] = useState(false);
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    const tokenResult = requestPasswordReset(email);
-    if (!tokenResult) {
-      setMessage("No account found for that email.");
-      return;
+    if (!email.trim()) return;
+    setLoading(true);
+    setIsError(false);
+    setMessage("");
+    try {
+      await apiClient.requestPasswordReset(email.trim());
+      setMessage("If an account exists for that email, a password reset link has been sent. Check your inbox.");
+    } catch (err: any) {
+      setIsError(true);
+      setMessage(err?.response?.data?.message ?? "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
     }
-    setToken(tokenResult);
-    setMessage("Password reset token generated. Use it on the reset page.");
   };
 
   return (
@@ -31,25 +37,33 @@ export default function ForgotPasswordPage() {
           <ThemeToggle />
         </div>
         <h1 className="text-3xl font-semibold text-white">Forgot your password?</h1>
-        <p className="mt-3 text-sm text-slate-400">Enter your email to receive a reset token and recover access.</p>
+        <p className="mt-3 text-sm text-slate-400">Enter your email to receive a password reset link.</p>
         <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
             <label className="mb-2 block text-sm text-slate-400">Email</label>
             <div className="flex items-center gap-2">
               <Mail className="h-4 w-4 text-cyan-300" />
-              <input className="w-full bg-transparent text-sm outline-none" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
+              <input
+                className="w-full bg-transparent text-sm outline-none text-white placeholder:text-slate-500"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@example.com"
+                type="email"
+                required
+              />
             </div>
           </div>
-          {message ? <div className="text-sm text-emerald-300">{message}</div> : null}
-          <button className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan-500 to-violet-500 px-4 py-3 font-semibold text-white">Send reset token</button>
+          {message ? (
+            <div className={`text-sm ${isError ? "text-rose-300" : "text-emerald-300"}`}>{message}</div>
+          ) : null}
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan-500 to-violet-500 px-4 py-3 font-semibold text-white disabled:opacity-60"
+          >
+            {loading ? "Sending…" : "Send reset link"}
+          </button>
         </form>
-        {token ? (
-          <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-200">
-            <div className="font-semibold text-white">Reset token</div>
-            <div className="mt-2 break-all">{token}</div>
-            <Link href="/auth/reset-password" className="mt-3 inline-flex text-cyan-300">Go to reset page</Link>
-          </div>
-        ) : null}
         <div className="mt-6 text-sm text-slate-400">Remembered it? <Link href="/auth/login" className="text-cyan-300">Sign in</Link></div>
       </div>
     </main>
