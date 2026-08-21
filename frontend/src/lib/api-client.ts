@@ -75,8 +75,9 @@ class ApiClient {
 
   async login(email: string, password: string) {
     const response = await this.client.post('/auth/login', { email, password });
-    if (response.data.data?.token) {
-      this.setAuthToken(response.data.data.token);
+    const token = response.data?.access_token || response.data?.data?.token || response.data?.token;
+    if (token) {
+      this.setAuthToken(token);
     }
     return response.data;
   }

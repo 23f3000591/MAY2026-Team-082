@@ -41,8 +41,10 @@ export default function LoginPage() {
         setCurrentUser(userData);
         
         // Save JWT token
-        if (response.data.token) {
-          localStorage.setItem("authToken", response.data.token);
+        const token = response.access_token || response.data?.token || response.token;
+        if (token) {
+          localStorage.setItem("authToken", token);
+          apiClient.setAuthToken(token);
         }
         
         // Redirect based on role
