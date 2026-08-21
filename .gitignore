@@ -26,3 +26,8 @@ node_modules/
 .next/
 
 .env*
+
+# Local Scripts
+*.bat
+run.bat
+start.bat
