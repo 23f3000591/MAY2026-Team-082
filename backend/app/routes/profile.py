@@ -8,6 +8,8 @@ from app.services.profile_service import (
     edit_profile_service,
     upload_profile_picture_service,
     add_skill_service,
+    get_mentor_profile_service,
+    get_learner_profile_service,
 )
 
 # Blueprint for profile routes
@@ -300,6 +302,109 @@ def add_skill():
     except Exception as err:
         current_app.logger.exception(
             f"Unexpected error in add_skill: {str(err)}"
+        )
+
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "An unexpected error occurred.",
+                }
+            ),
+            500,
+        )
+        
+        
+# Endpoint for viewing a mentor's profile
+@profile_bp.route("/mentor/<int:user_id>", methods=["GET"])
+@jwt_required()
+def view_mentor_profile(user_id):
+    """
+    GET /api/profile/mentor/<user_id>
+
+    Returns the public profile of a mentor, including skills
+    and review summary.
+    """
+
+    try:
+        profile_data = get_mentor_profile_service(user_id)
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "Mentor profile retrieved successfully",
+                    "data": profile_data,
+                }
+            ),
+            200,
+        )
+
+    except ValidationError as err:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": err.message,
+                }
+            ),
+            404,
+        )
+
+    except Exception as err:
+        current_app.logger.exception(
+            f"Unexpected error in view_mentor_profile: {str(err)}"
+        )
+
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "An unexpected error occurred.",
+                }
+            ),
+            500,
+        )
+
+
+# Endpoint for viewing a learner's profile
+@profile_bp.route("/learner/<int:user_id>", methods=["GET"])
+@jwt_required()
+def view_learner_profile(user_id):
+    """
+    GET /api/profile/learner/<user_id>
+
+    Returns the public profile of a learner, including skills.
+    """
+
+    try:
+        profile_data = get_learner_profile_service(user_id)
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "Learner profile retrieved successfully",
+                    "data": profile_data,
+                }
+            ),
+            200,
+        )
+
+    except ValidationError as err:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": err.message,
+                }
+            ),
+            404,
+        )
+
+    except Exception as err:
+        current_app.logger.exception(
+            f"Unexpected error in view_learner_profile: {str(err)}"
         )
 
         return (

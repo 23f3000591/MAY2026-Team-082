@@ -205,3 +205,85 @@ def add_skill_service(data):
     db.session.commit()
 
     return user_skill
+
+
+# Service function for viewing a mentor's profile
+def get_mentor_profile_service(user_id):
+    """
+    Retrieves a mentor's public profile, including their skills
+    and review summary.
+    """
+
+    user = db.session.get(User, user_id)
+
+    if user is None:
+        raise ValidationError("User not found.")
+
+    if not user.is_mentor:
+        raise ValidationError("This user does not have a mentor profile.")
+
+    skills = [
+        {
+            "skill_id": user_skill.skill_id,
+            "skill_name": user_skill.skill.skill_name,
+            "category": user_skill.skill.category,
+            "experience_level": user_skill.experience_level,
+            "years_of_experience": user_skill.years_of_experience,
+            "description": user_skill.description,
+        }
+        for user_skill in user.user_skills
+    ]
+
+    ratings = [review.rating for review in user.reviews_received]
+    average_rating = round(sum(ratings) / len(ratings), 2) if ratings else None
+
+    return {
+        "user_id": user.user_id,
+        "full_name": user.full_name,
+        "bio": user.bio,
+        "profile_image": user.profile_image,
+        "is_mentor": user.is_mentor,
+        "is_learner": user.is_learner,
+        "society_id": user.society_id,
+        "skills": skills,
+        "average_rating": average_rating,
+        "total_reviews": len(ratings),
+    }
+
+
+# Service function for viewing a learner's profile
+def get_learner_profile_service(user_id):
+    """
+    Retrieves a learner's public profile, including their skills.
+    """
+
+    user = db.session.get(User, user_id)
+
+    if user is None:
+        raise ValidationError("User not found.")
+
+    if not user.is_learner:
+        raise ValidationError("This user does not have a learner profile.")
+
+    skills = [
+        {
+            "skill_id": user_skill.skill_id,
+            "skill_name": user_skill.skill.skill_name,
+            "category": user_skill.skill.category,
+            "experience_level": user_skill.experience_level,
+            "years_of_experience": user_skill.years_of_experience,
+            "description": user_skill.description,
+        }
+        for user_skill in user.user_skills
+    ]
+
+    return {
+        "user_id": user.user_id,
+        "full_name": user.full_name,
+        "bio": user.bio,
+        "profile_image": user.profile_image,
+        "is_mentor": user.is_mentor,
+        "is_learner": user.is_learner,
+        "society_id": user.society_id,
+        "skills": skills,
+    }
