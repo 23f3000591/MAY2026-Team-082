@@ -27,7 +27,7 @@ const navItems = [
 const roleRoutes = {
   learner: ["/dashboard", "/search", "/favorites", "/bookings", "/notifications", "/messages", "/profile"],
   mentor: ["/dashboard", "/search", "/bookings", "/mentor", "/availability", "/messages", "/notifications", "/profile"],
-  admin: ["/admin", "/admin/users", "/admin/reports", "/admin/activity", "/profile"],
+  admin: ["/admin", "/admin/users", "/admin/reports", "/admin/activity"],
   manager: ["/dashboard", "/manager", "/search", "/bookings", "/messages", "/notifications", "/profile"],
   moderator: ["/dashboard", "/moderator", "/search", "/bookings", "/messages", "/notifications", "/profile"],
 };

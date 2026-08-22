@@ -1,0 +1,65 @@
+================================================================================
+          NEIGHBORHOOD SKILL EXCHANGE PLATFORM (NSEP) - USER CREDENTIALS
+================================================================================
+
+COMMON PASSWORD FOR ALL ACCOUNTS: Password123!
+DOMAIN: @gmail.com
+
+--------------------------------------------------------------------------------
+1. ADMINISTRATOR
+--------------------------------------------------------------------------------
+Name     : Akhil
+Email    : akhil@gmail.com
+Password : Password123!
+Role     : Admin
+Bio      : Lead Platform Administrator for Community Skill Exchange.
+
+--------------------------------------------------------------------------------
+2. MENTORS
+--------------------------------------------------------------------------------
+Name     : Saanvi
+Email    : saanvi@gmail.com
+Password : Password123!
+Role     : Mentor (Verified)
+Skills   : Python Programming (Expert), Web Development (Advanced)
+
+Name     : Karthick
+Email    : karthick@gmail.com
+Password : Password123!
+Role     : Mentor (Verified)
+Skills   : Yoga & Fitness (Expert)
+
+Name     : Harsh Kumar
+Email    : harshkumar@gmail.com
+Password : Password123!
+Role     : Mentor (Verified)
+Skills   : Guitar (Expert)
+
+--------------------------------------------------------------------------------
+3. LEARNERS
+--------------------------------------------------------------------------------
+Name     : Harshad
+Email    : harshad@gmail.com
+Password : Password123!
+Role     : Learner
+Interests: Backend Engineering, Python Programming
+
+Name     : Athul
+Email    : athul@gmail.com
+Password : Password123!
+Role     : Learner
+Interests: Guitar, Creative Arts
+
+Name     : Sooraj
+Email    : sooraj@gmail.com
+Password : Password123!
+Role     : Learner
+Interests: Yoga, Fitness & Wellness
+
+Name     : Manas
+Email    : manas@gmail.com
+Password : Password123!
+Role     : Learner
+Interests: Web Development, Tech Exploration
+
+================================================================================

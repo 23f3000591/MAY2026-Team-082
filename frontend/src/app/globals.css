@@ -1,34 +1,34 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
+  --background: #f0f4f9;
   --foreground: #0f172a;
-  --page-bg: linear-gradient(135deg, #f8fafc 0%, #eef2ff 45%, #e2e8f0 100%);
-  --surface: rgba(255, 255, 255, 0.9);
-  --surface-strong: rgba(255, 255, 255, 0.96);
-  --surface-elevated: rgba(248, 250, 252, 0.96);
-  --surface-hover: rgba(241, 245, 249, 0.95);
+  --page-bg: linear-gradient(135deg, #f0f4f9 0%, #e2e8f0 45%, #dbeafe 100%);
+  --surface: #ffffff;
+  --surface-strong: #f8fafc;
+  --surface-elevated: #ffffff;
+  --surface-hover: #f1f5f9;
   --text-primary: #0f172a;
-  --text-secondary: #1e293b;
-  --text-muted: #475569;
-  --border: rgba(15, 23, 42, 0.14);
-  --shadow-color: rgba(15, 23, 42, 0.1);
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
+  --shadow-color: rgba(15, 23, 42, 0.08);
   --accent: #0891b2;
 }
 
 :root[data-theme="dark"] {
-  --background: #020617;
+  --background: #070d18;
   --foreground: #f8fafc;
-  --page-bg: radial-gradient(circle_at_top, rgba(34, 211, 238, 0.16), transparent 30%), linear-gradient(135deg, #020617 0%, #0f172a 45%, #111827 100%);
-  --surface: rgba(15, 23, 42, 0.78);
-  --surface-strong: rgba(30, 41, 59, 0.86);
-  --surface-elevated: rgba(2, 6, 23, 0.82);
-  --surface-hover: rgba(51, 65, 85, 0.9);
+  --page-bg: radial-gradient(circle at 50% 0%, rgba(34, 211, 238, 0.12) 0%, transparent 40%), linear-gradient(180deg, #070d18 0%, #0b1324 100%);
+  --surface: #0f172a;
+  --surface-strong: #131c31;
+  --surface-elevated: #1e293b;
+  --surface-hover: #1e293b;
   --text-primary: #f8fafc;
-  --text-secondary: #e2e8f0;
+  --text-secondary: #cbd5e1;
   --text-muted: #94a3b8;
-  --border: rgba(255, 255, 255, 0.14);
-  --shadow-color: rgba(2, 132, 199, 0.18);
+  --border: rgba(255, 255, 255, 0.1);
+  --shadow-color: rgba(0, 0, 0, 0.5);
   --accent: #22d3ee;
 }
 
@@ -49,7 +49,7 @@ body {
   background: var(--page-bg);
   color: var(--text-primary);
   font-family: Arial, Helvetica, sans-serif;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 * {
@@ -61,22 +61,33 @@ body {
   color: white;
 }
 
-.bg-slate-900\/70 { background-color: var(--surface) !important; }
-.bg-slate-900\/60 { background-color: var(--surface-strong) !important; }
-.bg-slate-950\/70 { background-color: var(--surface-elevated) !important; }
-.bg-white\/5 { background-color: var(--surface-strong) !important; }
-.bg-white\/10 { background-color: var(--surface-hover) !important; }
-.bg-white\/70 { background-color: var(--surface-strong) !important; }
+/* Glassmorphism and surface cards mapped to theme variables */
+.bg-slate-900\/80,
+.bg-slate-900\/70,
+.bg-slate-900 {
+  background-color: var(--surface) !important;
+}
 
-.text-slate-100,
-.text-white { color: var(--text-primary) !important; }
-.text-slate-200 { color: var(--text-secondary) !important; }
-.text-slate-300,
-.text-slate-400,
-.text-slate-500 { color: var(--text-muted) !important; }
+.bg-slate-950\/80,
+.bg-slate-950\/70,
+.bg-slate-950\/60,
+.bg-slate-950 {
+  background-color: var(--surface-strong) !important;
+}
 
-.border-white\/10 { border-color: var(--border) !important; }
+.bg-white\/5,
+.bg-white\/10 {
+  background-color: var(--surface-hover) !important;
+}
 
+.border-white\/10,
+.border-white\/15,
+.border-white\/20,
+.border-white\/5 {
+  border-color: var(--border) !important;
+}
+
+/* Form input elements */
 input,
 textarea,
 select {
@@ -102,36 +113,52 @@ textarea::placeholder {
   color: var(--text-muted) !important;
 }
 
+/* Light Theme Color Consistency */
+html[data-theme="light"] {
+  --page-bg: radial-gradient(circle at 50% 0%, #eef5fc 0%, transparent 60%), linear-gradient(180deg, #edf2f9 0%, #e2e8f0 100%);
+}
+
 html[data-theme="light"] .text-white,
 html[data-theme="light"] .text-slate-100,
 html[data-theme="light"] .text-slate-50 {
-  color: var(--text-primary) !important;
+  color: #0f172a !important;
 }
 
 html[data-theme="light"] .text-slate-200,
-html[data-theme="light"] .text-slate-300,
+html[data-theme="light"] .text-slate-300 {
+  color: #334155 !important;
+}
+
 html[data-theme="light"] .text-slate-400,
 html[data-theme="light"] .text-slate-500 {
-  color: var(--text-secondary) !important;
+  color: #64748b !important;
 }
 
 html[data-theme="light"] .text-cyan-200,
 html[data-theme="light"] .text-cyan-300,
-html[data-theme="light"] .text-cyan-400,
-html[data-theme="light"] .text-cyan-500 {
-  color: #0f596a !important;
+html[data-theme="light"] .text-cyan-400 {
+  color: #0e7490 !important;
 }
 
 html[data-theme="light"] .bg-cyan-400\/10,
 html[data-theme="light"] .bg-cyan-500\/10,
-html[data-theme="light"] .bg-cyan-500\/20 {
+html[data-theme="light"] .bg-cyan-500\/15 {
   background-color: rgba(14, 116, 144, 0.1) !important;
 }
 
 html[data-theme="light"] .border-cyan-400\/20,
 html[data-theme="light"] .border-cyan-400\/30 {
-  border-color: rgba(14, 116, 144, 0.18) !important;
+  border-color: rgba(14, 116, 144, 0.25) !important;
 }
 
-.from-slate-900\/80 { --tw-gradient-from: var(--surface) !important; }
-.to-slate-950\/80 { --tw-gradient-to: var(--surface-elevated) !important; }
+/* Gradient Action Buttons (Cyan to Purple pill from screenshots) */
+.btn-primary-gradient,
+.bg-gradient-to-r.from-cyan-500 {
+  background-image: linear-gradient(to right, #06b6d4, #3b82f6, #8b5cf6) !important;
+  color: #ffffff !important;
+}
+
+.btn-primary-gradient:hover,
+.bg-gradient-to-r.from-cyan-500:hover {
+  filter: brightness(1.08);
+}

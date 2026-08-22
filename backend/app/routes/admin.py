@@ -347,10 +347,16 @@ def get_reports():
                         {
                             "report_id": report.report_id,
                             "reported_by": report.reported_by,
+                            "reported_by_name": report.reporter.full_name if report.reporter else None,
                             "reported_user": report.reported_user,
+                            "reported_user_name": report.reported_user_ref.full_name if report.reported_user_ref else None,
                             "reason": report.reason,
+                            "description": report.description,
                             "status": report.status,
+                            "resolved_by": report.resolved_by,
+                            "resolved_by_name": report.resolver.full_name if report.resolver else None,
                             "created_at": report.created_at.isoformat(),
+                            "resolved_at": report.resolved_at.isoformat() if report.resolved_at else None,
                         }
                         for report in reports
                     ],
@@ -425,11 +431,14 @@ def get_report_details(report_id):
                     "data": {
                         "report_id": report.report_id,
                         "reported_by": report.reported_by,
+                        "reported_by_name": report.reporter.full_name if report.reporter else None,
                         "reported_user": report.reported_user,
+                        "reported_user_name": report.reported_user_ref.full_name if report.reported_user_ref else None,
                         "reason": report.reason,
                         "description": report.description,
                         "status": report.status,
                         "resolved_by": report.resolved_by,
+                        "resolved_by_name": report.resolver.full_name if report.resolver else None,
                         "created_at": report.created_at.isoformat(),
                         "resolved_at": (
                             report.resolved_at.isoformat()

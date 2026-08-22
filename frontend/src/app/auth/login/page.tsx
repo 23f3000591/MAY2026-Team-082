@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
-import { ArrowRight, Sparkles, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight, Sparkles, Loader2, Eye, EyeOff, ShieldCheck, UserCheck, GraduationCap, AlertCircle } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { apiClient } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
@@ -11,19 +11,36 @@ import { useAppStore } from "@/lib/store";
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const setCurrentUser = useAppStore((state) => state.setCurrentUser);
 
+  const handleQuickFill = (demoEmail: string, demoPass: string) => {
+    setEmail(demoEmail);
+    setPassword(demoPass);
+    setError("");
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
+
+    if (!email.trim()) {
+      setError("Please enter your email address.");
+      return;
+    }
+    if (!password.trim()) {
+      setError("Please enter your password.");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      const response = await apiClient.login(email, password);
-      if (response.status === "success") {
+      const response = await apiClient.login(email.trim(), password.trim());
+      if (response.status === "success" && response.data) {
         // Save user info to localStorage
         localStorage.setItem("currentUser", JSON.stringify(response.data));
         
@@ -56,10 +73,13 @@ export default function LoginPage() {
           "/dashboard";
         router.replace(redirectPath);
       } else {
-        setError(response.message || "Login failed");
+        setError(response.message || "Invalid credentials. Please try again.");
       }
     } catch (err: any) {
-      const errorMsg = err.response?.data?.message || err.message || "Login failed. Please try again.";
+      const errorMsg =
+        err.response?.data?.message ||
+        err.message ||
+        "Could not connect to authentication server. Please ensure the backend is running.";
       setError(errorMsg);
     } finally {
       setIsLoading(false);
@@ -68,63 +88,119 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[var(--page-bg)] p-4 text-[var(--text-primary)] transition-colors duration-200">
-      <div className="w-full max-w-md rounded-[2rem] border border-white/10 bg-slate-900/70 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.35)] backdrop-blur-xl">
+      <div className="w-full max-w-lg rounded-[2.5rem] border border-white/15 bg-slate-900/80 p-8 sm:p-10 shadow-[0_24px_90px_rgba(15,23,42,0.45)] backdrop-blur-2xl">
         <div className="mb-6 flex items-center justify-between gap-2 text-cyan-200">
           <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5" />
-            <span className="text-sm font-semibold uppercase tracking-[0.3em]">Welcome back</span>
+            <Sparkles className="h-5 w-5 text-cyan-400" />
+            <span className="text-xs font-bold uppercase tracking-[0.28em] text-cyan-300">Welcome back</span>
           </div>
           <ThemeToggle />
         </div>
-        <h1 className="text-3xl font-semibold text-white">Sign in to continue your learning.</h1>
-        <p className="mt-3 text-sm text-slate-400">Access your dashboard, bookings, and community circles in one place.</p>
-        <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
-          <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/70 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <label className="mb-2 block text-sm uppercase tracking-[0.2em] text-slate-500">Email</label>
+
+        <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">Sign in to your account</h1>
+        <p className="mt-2.5 text-sm text-slate-300">Access your dashboard, manage community learning, and connect with peers.</p>
+
+        {/* Quick Demo Fill Buttons */}
+        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-3.5">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Quick Test Credentials</div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => handleQuickFill("akhil@gmail.com", "Password123!")}
+              className="flex items-center gap-1.5 rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-medium text-purple-200 hover:bg-purple-500/20 transition"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-purple-300" /> Akhil (Admin)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickFill("saanvi@gmail.com", "Password123!")}
+              className="flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-200 hover:bg-cyan-500/20 transition"
+            >
+              <UserCheck className="h-3.5 w-3.5 text-cyan-300" /> Saanvi (Mentor)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickFill("harshad@gmail.com", "Password123!")}
+              className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-200 hover:bg-emerald-500/20 transition"
+            >
+              <GraduationCap className="h-3.5 w-3.5 text-emerald-300" /> Harshad (Learner)
+            </button>
+          </div>
+        </div>
+
+        <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+          <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/70 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus-within:border-cyan-500/50 transition">
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Email Address</label>
             <input 
-              className="w-full rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 disabled:opacity-50" 
+              className="w-full rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 disabled:opacity-50" 
               value={email} 
               onChange={(event) => setEmail(event.target.value)} 
-              placeholder="you@example.com"
+              placeholder="akhil@gmail.com"
               type="email"
+              autoComplete="email"
               disabled={isLoading}
             />
           </div>
-          <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/70 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+
+          <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/70 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus-within:border-cyan-500/50 transition">
             <div className="flex items-center justify-between gap-3">
-              <label className="text-sm uppercase tracking-[0.2em] text-slate-500">Password</label>
-              <Link href="/auth/forgot-password" className="text-sm font-semibold text-cyan-300 transition hover:text-white">Forgot password?</Link>
+              <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Password</label>
+              <Link href="/auth/forgot-password" className="text-xs font-medium text-cyan-300 transition hover:text-white">Forgot password?</Link>
             </div>
-            <input 
-              className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 disabled:opacity-50" 
-              type="password" 
-              value={password} 
-              onChange={(event) => setPassword(event.target.value)} 
-              placeholder="••••••••"
-              disabled={isLoading}
-            />
+            <div className="relative mt-2">
+              <input 
+                className="w-full rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 pr-12 text-sm text-white placeholder-slate-500 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 disabled:opacity-50" 
+                type={showPassword ? "text" : "password"} 
+                value={password} 
+                onChange={(event) => setPassword(event.target.value)} 
+                placeholder="••••••••••••"
+                autoComplete="current-password"
+                disabled={isLoading}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400 hover:text-white focus:outline-none transition"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
-          {error && <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</div>}
+
+          {error && (
+            <div className="flex items-start gap-2.5 rounded-2xl border border-rose-400/30 bg-rose-500/10 p-3.5 text-sm text-rose-200 animate-in fade-in duration-200">
+              <AlertCircle className="h-5 w-5 shrink-0 text-rose-400 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
           <button 
             type="submit"
             disabled={isLoading}
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan-500 to-violet-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/20 transition hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-indigo-500 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition-all duration-200 hover:shadow-cyan-500/40 hover:brightness-110 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {isLoading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Signing in...
+                Authenticating...
               </>
             ) : (
               <>
-                Continue
+                Sign in to Platform
                 <ArrowRight className="h-4 w-4" />
               </>
             )}
           </button>
         </form>
-        <div className="mt-6 text-sm text-slate-400">New here? <Link href="/auth/signup" className="text-cyan-300">Create an account</Link></div>
+
+        <div className="mt-6 text-center text-sm text-slate-400">
+          New to the community?{" "}
+          <Link href="/auth/signup" className="font-semibold text-cyan-300 hover:underline">
+            Create an account
+          </Link>
+        </div>
       </div>
     </main>
   );
 }
+

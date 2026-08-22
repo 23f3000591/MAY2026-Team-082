@@ -166,8 +166,8 @@ def update_user_suspension_service(user_id, data):
     if not user:
         raise ResourceNotFoundError("User not found.")
 
-    if user.user_id == admin.user_id:
-        raise ValidationError("Administrators cannot suspend their own account.")
+    if user.role == "admin" or user.user_id == admin.user_id:
+        raise ValidationError("Administrator accounts cannot be suspended.")
 
     if user.is_suspended == is_suspended:
         state = "suspended" if is_suspended else "active"
