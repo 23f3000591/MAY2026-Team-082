@@ -146,6 +146,12 @@ function DiscoverContent() {
       router.push("/auth/login");
       return;
     }
+    const currentUserId = String(currentUser.id || "");
+    const mentorId = String(mentor.user_id || mentor.id || "");
+    if (currentUserId && mentorId === currentUserId) {
+      showToast("error", "This is your own profile! You cannot book a session with yourself.");
+      return;
+    }
     setBookingMentor(mentor);
     if (mentor.skills && mentor.skills.length > 0) {
       setBookingSkillId(mentor.skills[0].skill_id || 1);

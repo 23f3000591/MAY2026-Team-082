@@ -401,6 +401,10 @@ export default function MentorDetailPage() {
                 <button
                   onClick={() => {
                     if (!currentUser) { showMsg("error", "Please log in to request a session."); return; }
+                    if (String(currentUser.id) === String(mentor.id)) {
+                      showMsg("error", "This is your own mentor profile! You cannot book a session with yourself.");
+                      return;
+                    }
                     setShowSessionModal(true);
                   }}
                   className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-indigo-500 px-5 py-2.5 text-xs font-bold text-white shadow-lg transition hover:brightness-110 cursor-pointer"

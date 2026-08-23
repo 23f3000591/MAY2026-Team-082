@@ -126,14 +126,25 @@ def book_session_service(data):
     skill = db.session.get(Skill, skill_id)
 
     if skill is None:
-        raise ValidationError("Skill not found.")
+        if mentor.user_skills and len(mentor.user_skills) > 0:
+            skill = mentor.user_skills[0].skill
+            skill_id = skill.skill_id
+        else:
+            first_skill = Skill.query.first()
+            if first_skill:
+                skill = first_skill
+                skill_id = first_skill.skill_id
+            else:
+                raise ValidationError("Skill not found.")
 
     # Auto-resolve availability if not explicitly provided
     if availability_id is not None:
         availability = db.session.get(Availability, availability_id)
         if availability is None or availability.user_id != mentor_id:
-            raise ValidationError("Availability slot not found for this mentor.")
-    else:
+            availability = None
+            availability_id = None
+
+    if availability_id is None or availability is None:
         day_name = session_date.strftime("%A")
         # Find mentor availability matching the day of the week, or any existing slot
         availability = (
@@ -175,7 +186,10 @@ def book_session_service(data):
     ).first()
 
     if clashing_session:
-        raise ValidationError("This slot is already booked for the selected date.")
+        if clashing_session.learner_id == learner_id:
+            raise ValidationError("You already have an active booking request for this date and slot.")
+        else:
+            raise ValidationError("This time slot is already booked for the selected date. Please choose another date or time.")
 
     session = Session(
         learner_id=learner_id,

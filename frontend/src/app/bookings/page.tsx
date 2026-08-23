@@ -85,8 +85,10 @@ export default function BookingsPage() {
       if (mentorsRes.status === "fulfilled") {
         const mData = Array.isArray(mentorsRes.value) ? mentorsRes.value : (mentorsRes.value as any)?.data ?? [];
         setMentorsList(mData);
-        if (mData.length > 0) {
-          const firstM = mData[0];
+        const currentUserId = String(currentUser?.id || "");
+        const validMentors = mData.filter((m: any) => String(m.user_id || m.id) !== currentUserId);
+        if (validMentors.length > 0) {
+          const firstM = validMentors[0];
           const firstMId = String(firstM.user_id || firstM.id);
           setMentorId(firstMId);
           if (firstM.skills && firstM.skills.length > 0) {
@@ -104,6 +106,10 @@ export default function BookingsPage() {
   useEffect(() => {
     if (currentUser) {
       fetchInitialData();
+      // Pre-fill tomorrow's date
+      const tom = new Date();
+      tom.setDate(tom.getDate() + 1);
+      setDate(tom.toISOString().split("T")[0]);
     }
   }, [currentUser]);
 
@@ -160,12 +166,15 @@ export default function BookingsPage() {
     }
   }, [slotsForSelectedDate]);
 
-  // Filter mentors based on search query, category, and favorite list
+  // Filter mentors based on search query, category, and favorite list (excluding self)
   const filteredMentors = useMemo(() => {
     const userFavs = (currentUser?.favorites || []).map(String);
+    const currentUserIdStr = String(currentUser?.id || "");
 
     return mentorsList.filter((m) => {
       const mId = String(m.user_id || m.id);
+      if (currentUserIdStr && mId === currentUserIdStr) return false;
+
       const name = (m.full_name || m.name || "").toLowerCase();
       const skillsStr = (m.skills || []).map((s: any) => (s.skill_name || s.name || "").toLowerCase()).join(" ");
       const matchesSearch = !mentorSearchQuery.trim() || 
@@ -179,20 +188,43 @@ export default function BookingsPage() {
 
       return matchesSearch && matchesCategory && matchesFavs;
     });
-  }, [mentorsList, mentorSearchQuery, mentorCategoryFilter, onlyFavorites, currentUser?.favorites]);
+  }, [mentorsList, mentorSearchQuery, mentorCategoryFilter, onlyFavorites, currentUser?.favorites, currentUser?.id]);
 
   const favoriteMentorsList = useMemo(() => {
     const userFavs = (currentUser?.favorites || []).map(String);
-    return mentorsList.filter((m) => userFavs.includes(String(m.user_id || m.id)));
-  }, [mentorsList, currentUser?.favorites]);
+    const currentUserIdStr = String(currentUser?.id || "");
+    return mentorsList.filter((m) => {
+      const mId = String(m.user_id || m.id);
+      return mId !== currentUserIdStr && userFavs.includes(mId);
+    });
+  }, [mentorsList, currentUser?.favorites, currentUser?.id]);
 
   const selectedMentor = useMemo(() => {
-    return mentorsList.find((m) => String(m.user_id || m.id) === String(mentorId)) || filteredMentors[0] || mentorsList[0];
-  }, [mentorsList, mentorId, filteredMentors]);
+    return filteredMentors.find((m) => String(m.user_id || m.id) === String(mentorId)) || filteredMentors[0] || null;
+  }, [filteredMentors, mentorId]);
+
+  // Auto-sync mentorId and skillId when selectedMentor changes
+  useEffect(() => {
+    if (selectedMentor) {
+      const mId = String(selectedMentor.user_id || selectedMentor.id);
+      if (mentorId !== mId) {
+        setMentorId(mId);
+      }
+      if (selectedMentor.skills && selectedMentor.skills.length > 0) {
+        const hasSkill = selectedMentor.skills.some((s: any) => s.skill_id === skillId);
+        if (!hasSkill) {
+          setSkillId(selectedMentor.skills[0].skill_id || 1);
+        }
+      }
+    }
+  }, [selectedMentor, mentorId, skillId]);
 
   const handleCreateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser || !date || !mentorId) return;
+    if (!currentUser || !date || !mentorId) {
+      setStatusMsg({ type: "error", text: "Please select a mentor and date." });
+      return;
+    }
 
     setSubmitting(true);
     setStatusMsg(null);
@@ -203,9 +235,10 @@ export default function BookingsPage() {
       : formatTime12(customTime);
 
     try {
+      const sId = Number(skillId) || selectedMentor?.skills?.[0]?.skill_id || 1;
       await apiClient.bookSession({
         mentor_id: Number(mentorId),
-        skill_id: Number(skillId) || 1,
+        skill_id: sId,
         availability_id: selectedAvailabilityId ? Number(selectedAvailabilityId) : undefined,
         session_mode: mode,
         session_date: date,
@@ -218,7 +251,6 @@ export default function BookingsPage() {
 
       const mName = selectedMentor?.full_name || selectedMentor?.name || "Mentor";
       setStatusMsg({ type: "success", text: `Session request sent to ${mName} for ${timeDisplay}!` });
-      setDate("");
       setNote("");
       setActiveTab("pending");
       

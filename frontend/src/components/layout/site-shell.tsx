@@ -88,14 +88,14 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
     router.push("/auth/login");
   };
 
-  const userRole = (currentUser?.role?.toLowerCase() ?? "learner");
+  const isMentorUser = userRole === "mentor" || Boolean(currentUser?.is_mentor);
 
   // Streamlined and consolidated navigation tabs
   const navLinks = [
     { href: "/dashboard", label: "Home", icon: Home, show: userRole !== "admin" },
-    { href: "/search", label: "Discover", icon: Compass, show: userRole === "learner" },
-    { href: "/bookings", label: "My Bookings", icon: BookOpenCheck, show: userRole === "learner" },
-    { href: "/mentor", label: "Mentor Workspace", icon: CalendarDays, show: userRole === "mentor" },
+    { href: "/search", label: "Discover", icon: Compass, show: userRole !== "admin" },
+    { href: "/bookings", label: "My Bookings", icon: BookOpenCheck, show: userRole !== "admin" },
+    { href: "/mentor", label: "Mentor Workspace", icon: CalendarDays, show: isMentorUser },
     { href: "/admin", label: "Admin Center", icon: ShieldCheck, show: userRole === "admin" },
     { href: "/admin/users", label: "User Management", icon: Users, show: userRole === "admin" },
     { href: "/admin/reports", label: "Moderation", icon: AlertTriangle, show: userRole === "admin" },
