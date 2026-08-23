@@ -89,7 +89,7 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
   };
 
   const userRole = (currentUser?.role?.toLowerCase() ?? "learner");
-  const isMentorUser = userRole === "mentor" || Boolean(currentUser?.is_mentor);
+  const isMentorUser = userRole === "mentor" || Boolean((currentUser as any)?.is_mentor);
 
   // Streamlined and consolidated navigation tabs
   const navLinks = [

@@ -149,7 +149,8 @@ function DiscoverContent() {
     const currentUserId = String(currentUser.id || "");
     const mentorId = String(mentor.user_id || mentor.id || "");
     if (currentUserId && mentorId === currentUserId) {
-      showToast("error", "This is your own profile! You cannot book a session with yourself.");
+      setMessage({ type: "error", text: "This is your own profile! You cannot book a session with yourself." });
+      setTimeout(() => setMessage(null), 3500);
       return;
     }
     setBookingMentor(mentor);
