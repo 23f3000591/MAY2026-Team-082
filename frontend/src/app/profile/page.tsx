@@ -272,13 +272,15 @@ export default function ProfilePage() {
                 )}
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-center">
-                <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Skills Listed</div>
-                <div className="mt-1 text-xl font-bold text-cyan-300">
-                  {skills.length}
+              {role === "mentor" && (
+                <div className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-center">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Skills Listed</div>
+                  <div className="mt-1 text-xl font-bold text-cyan-300">
+                    {skills.length}
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">teach & share</div>
                 </div>
-                <div className="text-[10px] text-slate-400 mt-0.5">teach & share</div>
-              </div>
+              )}
 
               {/* Message Admin Support Option */}
               <Link
@@ -305,10 +307,9 @@ export default function ProfilePage() {
           </div>
         )}
 
-        <div className="mt-8 grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
-          {/* Left Column: Edit Profile & Skills I Want to Learn */}
+        <div className={role === "mentor" ? "mt-8 grid gap-8 lg:grid-cols-[1.1fr_0.9fr]" : "mt-8 max-w-3xl mx-auto"}>
+          {/* Edit Profile Form */}
           <div className="space-y-8">
-            {/* Edit Profile Form */}
             <div className="rounded-[2.5rem] border border-white/10 bg-slate-900/70 p-6 sm:p-8">
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
                 <User className="h-5 w-5 text-cyan-400" /> About & Bio
@@ -332,7 +333,7 @@ export default function ProfilePage() {
                     rows={3}
                     value={bio}
                     onChange={(e) => setBio(e.target.value)}
-                    placeholder="Tell neighbors about your experience, background, and passion..."
+                    placeholder="Tell neighbors about your experience, background, and interests..."
                     className="w-full rounded-xl border border-white/10 bg-slate-950 p-3 text-xs text-white outline-none focus:border-cyan-400"
                   />
                 </div>
@@ -372,150 +373,106 @@ export default function ProfilePage() {
                 </button>
               </form>
             </div>
+          </div>
 
-            {/* Skills I Want to Learn (Learner Goals) - only visible for learners */}
-            {role === "learner" && (
+          {/* Right Column: Skills I Can Teach (Only for Mentors) */}
+          {role === "mentor" && (
+            <div className="space-y-6">
               <div className="rounded-[2.5rem] border border-white/10 bg-slate-900/70 p-6 sm:p-8">
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                    <GraduationCap className="h-5 w-5 text-indigo-400" /> Skills I Want to Learn
-                  </h2>
-                  <span className="text-xs text-indigo-300 font-semibold">{learningGoals.length} goals</span>
-                </div>
-                <p className="text-xs text-slate-400">Neighbors can see your learning goals and offer skill exchanges.</p>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Award className="h-5 w-5 text-teal-400" /> Skills I Can Teach ({skills.length})
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">Skills you can share with neighbors in Green Valley Heights.</p>
 
-                <form onSubmit={handleAddLearningGoal} className="mt-4 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={newGoalInput}
-                    onChange={(e) => setNewGoalInput(e.target.value)}
-                    placeholder="e.g. Creative Photography, Italian Cooking..."
-                    className="flex-1 rounded-xl border border-white/10 bg-slate-950 p-2.5 text-xs text-white outline-none focus:border-indigo-400"
-                  />
+                {/* Add Skill Form */}
+                <form onSubmit={handleAddSkill} className="mt-6 rounded-2xl border border-white/10 bg-slate-950/70 p-4 space-y-3">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Skill name (e.g. Portrait Photography)"
+                      value={newSkillName}
+                      onChange={(e) => setNewSkillName(e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-slate-900 px-3.5 py-2.5 text-xs text-white outline-none focus:border-cyan-400"
+                    />
+
+                    <select
+                      value={newSkillCategory}
+                      onChange={(e) => setNewSkillCategory(e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none focus:border-cyan-400"
+                    >
+                      <option value="Technology">💻 Technology & Code</option>
+                      <option value="Music">🎸 Music & Instruments</option>
+                      <option value="Fitness">🧘 Yoga & Fitness</option>
+                      <option value="Cooking">🍳 Cooking & Food</option>
+                      <option value="Arts & Creativity">🎨 Arts & Creativity</option>
+                      <option value="Languages">🗣️ Languages & Speaking</option>
+                      <option value="Academic">📚 Academic & Tutoring</option>
+                      <option value="General">🌟 General Skills</option>
+                    </select>
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <select
+                      value={newSkillLevel}
+                      onChange={(e) => setNewSkillLevel(e.target.value as SkillLevel)}
+                      className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none"
+                    >
+                      <option value="Beginner">Beginner</option>
+                      <option value="Intermediate">Intermediate</option>
+                      <option value="Advanced">Advanced</option>
+                      <option value="Expert">Expert</option>
+                    </select>
+
+                    <input
+                      type="number"
+                      min={1}
+                      max={40}
+                      placeholder="Years experience"
+                      value={newSkillYears}
+                      onChange={(e) => setNewSkillYears(Number(e.target.value))}
+                      className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none"
+                    />
+                  </div>
+
                   <button
                     type="submit"
-                    className="rounded-xl bg-indigo-500/20 border border-indigo-500/30 px-4 py-2.5 text-xs font-bold text-indigo-300 hover:bg-indigo-500/30 transition cursor-pointer"
+                    className="w-full rounded-full bg-teal-500/20 border border-teal-500/30 px-4 py-2 text-xs font-bold text-teal-300 hover:bg-teal-500/30 transition cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    Add Goal
+                    <Plus className="h-3.5 w-3.5" /> Publish Teaching Skill
                   </button>
                 </form>
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {learningGoals.map((goal) => (
-                    <span
-                      key={goal}
-                      className="inline-flex items-center gap-2 rounded-xl border border-indigo-400/20 bg-indigo-500/10 px-3 py-1.5 text-xs text-indigo-200"
-                    >
-                      <span>{goal}</span>
-                      <button
-                        onClick={() => handleRemoveLearningGoal(goal)}
-                        className="text-slate-400 hover:text-rose-300 text-xs cursor-pointer"
+                {/* Skills List */}
+                <div className="mt-4 space-y-2 max-h-80 overflow-y-auto pr-1">
+                  {skills.length ? (
+                    skills.map((skill) => (
+                      <div
+                        key={skill.id}
+                        className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-xs"
                       >
-                        ✕
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Right Column: Skills I Can Teach */}
-          <div className="space-y-6">
-            <div className="rounded-[2.5rem] border border-white/10 bg-slate-900/70 p-6 sm:p-8">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                <Award className="h-5 w-5 text-teal-400" /> Skills I Can Teach ({skills.length})
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">Skills you can share with neighbors in Green Valley Heights.</p>
-
-              {/* Add Skill Form */}
-              <form onSubmit={handleAddSkill} className="mt-6 rounded-2xl border border-white/10 bg-slate-950/70 p-4 space-y-3">
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Skill name (e.g. Portrait Photography)"
-                    value={newSkillName}
-                    onChange={(e) => setNewSkillName(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-slate-900 px-3.5 py-2.5 text-xs text-white outline-none focus:border-cyan-400"
-                  />
-
-                  <select
-                    value={newSkillCategory}
-                    onChange={(e) => setNewSkillCategory(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none focus:border-cyan-400"
-                  >
-                    <option value="Technology">💻 Technology & Code</option>
-                    <option value="Music">🎸 Music & Instruments</option>
-                    <option value="Fitness">🧘 Yoga & Fitness</option>
-                    <option value="Cooking">🍳 Cooking & Food</option>
-                    <option value="Arts & Creativity">🎨 Arts & Creativity</option>
-                    <option value="Languages">🗣️ Languages & Speaking</option>
-                    <option value="Academic">📚 Academic & Tutoring</option>
-                    <option value="General">🌟 General Skills</option>
-                  </select>
-                </div>
-
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <select
-                    value={newSkillLevel}
-                    onChange={(e) => setNewSkillLevel(e.target.value as SkillLevel)}
-                    className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none"
-                  >
-                    <option value="Beginner">Beginner</option>
-                    <option value="Intermediate">Intermediate</option>
-                    <option value="Advanced">Advanced</option>
-                    <option value="Expert">Expert</option>
-                  </select>
-
-                  <input
-                    type="number"
-                    min={1}
-                    max={40}
-                    placeholder="Years experience"
-                    value={newSkillYears}
-                    onChange={(e) => setNewSkillYears(Number(e.target.value))}
-                    className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full rounded-full bg-teal-500/20 border border-teal-500/30 px-4 py-2 text-xs font-bold text-teal-300 hover:bg-teal-500/30 transition cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Publish Teaching Skill
-                </button>
-              </form>
-
-              {/* Skills List */}
-              <div className="mt-4 space-y-2 max-h-80 overflow-y-auto pr-1">
-                {skills.length ? (
-                  skills.map((skill) => (
-                    <div
-                      key={skill.id}
-                      className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-xs"
-                    >
-                      <div>
-                        <div className="font-bold text-white">{skill.name}</div>
-                        <div className="text-slate-400 mt-0.5">{skill.level} · {skill.years} {skill.years === 1 ? "year" : "years"} exp</div>
+                        <div>
+                          <div className="font-bold text-white">{skill.name}</div>
+                          <div className="text-slate-400 mt-0.5">{skill.level} · {skill.years} {skill.years === 1 ? "year" : "years"} exp</div>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveSkill(skill.id)}
+                          className="text-rose-400 hover:text-rose-300 transition p-1 cursor-pointer"
+                          title="Remove skill"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleRemoveSkill(skill.id)}
-                        className="text-rose-400 hover:text-rose-300 transition p-1 cursor-pointer"
-                        title="Remove skill"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-white/10 bg-slate-950/30 p-6 text-center text-xs text-slate-400">
+                      No teaching skills listed yet. Add your first skill above to become a community mentor!
                     </div>
-                  ))
-                ) : (
-                  <div className="rounded-xl border border-dashed border-white/10 bg-slate-950/30 p-6 text-center text-xs text-slate-400">
-                    No teaching skills listed yet. Add your first skill above to become a community mentor!
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </SiteShell>
