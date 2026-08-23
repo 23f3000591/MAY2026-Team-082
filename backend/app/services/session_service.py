@@ -120,7 +120,7 @@ def book_session_service(data):
 
     mentor = db.session.get(User, mentor_id)
 
-    if mentor is None or not mentor.is_mentor:
+    if mentor is None or not (mentor.is_mentor or (mentor.role and mentor.role.lower() == "mentor") or (mentor.user_skills and len(mentor.user_skills) > 0)):
         raise ValidationError("Mentor not found.")
 
     skill = db.session.get(Skill, skill_id)

@@ -100,7 +100,7 @@ def rate_mentor_service(data):
 
     mentor = db.session.get(User, session.mentor_id)
 
-    if mentor is None or not mentor.is_mentor:
+    if mentor is None or not (mentor.is_mentor or (mentor.role and mentor.role.lower() == "mentor") or (mentor.user_skills and len(mentor.user_skills) > 0)):
         raise NotFoundError("Mentor not found.")
 
     # Prevent duplicate ratings for the same session.
@@ -150,6 +150,7 @@ def get_mentor_reviews_service(mentor_id):
                 or_(
                     func.lower(User.role) == "mentor",
                     User.is_mentor.is_(True),
+                    User.user_skills.any(),
                 ),
             )
             .first()
@@ -158,7 +159,7 @@ def get_mentor_reviews_service(mentor_id):
             raise ValidationError("mentor_id must be a valid integer or mentor identifier.")
         mentor_id = mentor.user_id
 
-    if mentor is None or not (mentor.is_mentor or mentor.role.lower() == "mentor"):
+    if mentor is None or not (mentor.is_mentor or (mentor.role and mentor.role.lower() == "mentor") or (mentor.user_skills and len(mentor.user_skills) > 0)):
         raise NotFoundError("Mentor not found.")
 
     reviews = (

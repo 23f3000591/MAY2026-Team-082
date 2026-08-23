@@ -308,6 +308,7 @@ def delete_skill(skill_id):
     DELETE /api/profile/skills/<skill_id>
     """
     from flask_jwt_extended import get_jwt_identity
+    from app.models.user import User
     from app.models.user_skill import UserSkill
     from app.extensions import db
 
@@ -315,6 +316,11 @@ def delete_skill(skill_id):
     user_skill = UserSkill.query.filter_by(user_id=user_id, skill_id=skill_id).first()
     if user_skill:
         db.session.delete(user_skill)
+        user = db.session.get(User, user_id)
+        if user:
+            remaining = UserSkill.query.filter(UserSkill.user_id == user_id, UserSkill.skill_id != skill_id).count()
+            if remaining == 0 and (user.role or "").lower() != "mentor":
+                user.is_mentor = False
         db.session.commit()
     return jsonify({"status": "success", "message": "Skill removed"}), 200
 

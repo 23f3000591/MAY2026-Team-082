@@ -64,7 +64,7 @@ def set_mentor_availability_service(data):
     if user is None:
         raise ValidationError("User not found.")
 
-    if not user.is_mentor:
+    if not (user.is_mentor or (user.role and user.role.lower() == "mentor") or (user.user_skills and len(user.user_skills) > 0)):
         raise ValidationError("Only mentors can set availability.")
 
     overlap = Availability.query.filter(
@@ -101,7 +101,7 @@ def get_available_slots_service(mentor_id):
     if mentor is None:
         raise ValidationError("Mentor not found.")
 
-    if not mentor.is_mentor:
+    if not (mentor.is_mentor or (mentor.role and mentor.role.lower() == "mentor") or (mentor.user_skills and len(mentor.user_skills) > 0)):
         raise ValidationError("This user is not a mentor.")
 
     slots = (

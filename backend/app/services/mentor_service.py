@@ -60,6 +60,7 @@ class MentorSearchService:
                     or_(
                         func.lower(User.role) == "mentor",
                         User.is_mentor.is_(True),
+                        User.user_skills.any(),
                     ),
                 )
                 .first()
@@ -82,6 +83,7 @@ class MentorSearchService:
                     or_(
                         func.lower(User.role) == "mentor",
                         User.is_mentor.is_(True),
+                        User.user_skills.any(),
                     ),
                 )
                 .first()
@@ -172,6 +174,7 @@ class MentorSearchService:
                 or_(
                     func.lower(User.role) == "mentor",
                     User.is_mentor.is_(True),
+                    User.user_skills.any(),
                 ),
                 Skill.skill_name.ilike(f"%{cleaned_skill}%"),
             )
@@ -246,6 +249,7 @@ class MentorSearchService:
                 or_(
                     func.lower(User.role) == "mentor",
                     User.is_mentor.is_(True),
+                    User.user_skills.any(),
                 ),
                 or_(
                     Society.city.ilike(f"%{cleaned_location}%"),
@@ -347,6 +351,7 @@ class MentorSearchService:
                 or_(
                     func.lower(User.role) == "mentor",
                     User.is_mentor.is_(True),
+                    User.user_skills.any(),
                 )
             )
         )

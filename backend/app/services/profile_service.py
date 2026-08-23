@@ -201,6 +201,8 @@ def add_skill_service(data):
     if not user:
         raise ValidationError("User not found.")
 
+    user.is_mentor = True
+
     existing_skill = UserSkill.query.filter_by(
         user_id=user_id,
         skill_id=skill.skill_id,
@@ -236,11 +238,11 @@ def get_mentor_profile_service(user_id):
 
     user = db.session.get(User, user_id)
 
-    if user is None:
+    if not user:
         raise ValidationError("User not found.")
 
-    if not user.is_mentor:
-        raise ValidationError("This user does not have a mentor profile.")
+    if not (user.is_mentor or (user.role and user.role.lower() == "mentor") or (user.user_skills and len(user.user_skills) > 0)):
+        raise ValidationError("Mentor profile not found.")
 
     skills = [
         {

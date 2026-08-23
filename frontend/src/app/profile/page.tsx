@@ -143,32 +143,46 @@ export default function ProfilePage() {
     e.preventDefault();
     if (!newSkillName.trim()) return;
 
-    const skillItem: SkillEntry = {
-      id: `${newSkillName.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`,
-      name: newSkillName.trim(),
-      level: newSkillLevel,
-      years: newSkillYears,
-      description: newSkillDescription,
-    };
+    const skillNameVal = newSkillName.trim();
+    const skillCatVal = newSkillCategory;
+    const skillLvlVal = newSkillLevel;
+    const skillYrsVal = newSkillYears;
+    const skillDescVal = newSkillDescription;
 
-    const updatedSkills = [...skills, skillItem];
-    setSkills(updatedSkills);
     setNewSkillName("");
     setNewSkillDescription("");
 
     // Backend add skill
     try {
-      await apiClient.addSkill({
-        skill_name: newSkillName.trim(),
-        category: newSkillCategory,
-        experience_level: newSkillLevel,
-        years_of_experience: newSkillYears,
-        description: newSkillDescription,
+      const res = await apiClient.addSkill({
+        skill_name: skillNameVal,
+        category: skillCatVal,
+        experience_level: skillLvlVal,
+        years_of_experience: skillYrsVal,
+        description: skillDescVal,
       });
 
-      setStatusMsg({ type: "success", text: `"${newSkillName}" categorized under ${newSkillCategory} and added!` });
-    } catch {
-      // Local state is updated
+      const returnedId = res?.data?.skill_id ? String(res.data.skill_id) : `${skillNameVal.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`;
+      const skillItem: SkillEntry = {
+        id: returnedId,
+        name: skillNameVal,
+        level: skillLvlVal,
+        years: skillYrsVal,
+        description: skillDescVal,
+      };
+
+      setSkills((prev) => [...prev.filter((s) => s.name.toLowerCase() !== skillNameVal.toLowerCase()), skillItem]);
+      setStatusMsg({ type: "success", text: `"${skillNameVal}" categorized under ${skillCatVal} and added!` });
+    } catch (err: any) {
+      const skillItem: SkillEntry = {
+        id: `${skillNameVal.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`,
+        name: skillNameVal,
+        level: skillLvlVal,
+        years: skillYrsVal,
+        description: skillDescVal,
+      };
+      setSkills((prev) => [...prev, skillItem]);
+      setStatusMsg({ type: "error", text: err?.response?.data?.message || "Failed to save skill to server" });
     }
   };
 
@@ -177,7 +191,7 @@ export default function ProfilePage() {
     setSkills(updatedSkills);
 
     try {
-      const numericId = parseInt(skillId.split("-")[0]);
+      const numericId = parseInt(skillId);
       if (!isNaN(numericId)) {
         await apiClient.deleteSkill(numericId);
       }

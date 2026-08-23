@@ -48,6 +48,7 @@ class FavoriteService:
                     or_(
                         func.lower(User.role) == "mentor",
                         User.is_mentor.is_(True),
+                        User.user_skills.any(),
                     ),
                 )
                 .first()
@@ -65,6 +66,7 @@ class FavoriteService:
                     or_(
                         func.lower(User.role) == "mentor",
                         User.is_mentor.is_(True),
+                        User.user_skills.any(),
                     ),
                 )
                 .first()
@@ -114,6 +116,7 @@ class FavoriteService:
                     or_(
                         func.lower(User.role) == "mentor",
                         User.is_mentor.is_(True),
+                        User.user_skills.any(),
                     ),
                 )
                 .first()
@@ -131,6 +134,7 @@ class FavoriteService:
                     or_(
                         func.lower(User.role) == "mentor",
                         User.is_mentor.is_(True),
+                        User.user_skills.any(),
                     ),
                 )
                 .first()

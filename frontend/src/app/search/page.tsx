@@ -31,9 +31,13 @@ import { apiClient } from "@/lib/api-client";
 const CATEGORIES = [
   { id: "all", label: "All Topics" },
   { id: "Technology", label: "💻 Technology & Code" },
+  { id: "Languages", label: "🗣️ Languages & Speaking" },
   { id: "Music", label: "🎸 Music & Instruments" },
   { id: "Fitness", label: "🧘 Yoga & Fitness" },
   { id: "Cooking", label: "🍳 Cooking & Food" },
+  { id: "Arts & Creativity", label: "🎨 Arts & Creativity" },
+  { id: "Academic", label: "📚 Academic & Tutoring" },
+  { id: "General", label: "🌟 General Skills" },
 ];
 
 function DiscoverContent() {
