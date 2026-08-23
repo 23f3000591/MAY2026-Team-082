@@ -53,6 +53,11 @@ export default function BookingsPage() {
   const [location, setLocation] = useState("Tower B Clubhouse");
   const [meetingLink, setMeetingLink] = useState("https://meet.jit.si/NSEP-Session");
 
+  // Mentor availability slots & timing state
+  const [mentorSlots, setMentorSlots] = useState<any[]>([]);
+  const [selectedAvailabilityId, setSelectedAvailabilityId] = useState<number | null>(null);
+  const [customTime, setCustomTime] = useState<string>("18:00");
+
   // Sessions and Reviews State
   const [liveSessions, setLiveSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,6 +107,59 @@ export default function BookingsPage() {
     }
   }, [currentUser]);
 
+  // Fetch mentor availability slots whenever mentorId changes
+  useEffect(() => {
+    if (!mentorId) {
+      setMentorSlots([]);
+      return;
+    }
+    apiClient.getMentorAvailability(mentorId).then((res: any) => {
+      const slots = res?.data ?? [];
+      setMentorSlots(Array.isArray(slots) ? slots : []);
+    }).catch(() => {
+      setMentorSlots([]);
+    });
+  }, [mentorId]);
+
+  // Helper to format time in 12-hour AM/PM format
+  function formatTime12(timeStr: string) {
+    if (!timeStr) return "";
+    const [h, m] = timeStr.split(":").map(Number);
+    if (isNaN(h)) return timeStr;
+    const ampm = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 || 12;
+    const mStr = m !== undefined ? String(m).padStart(2, "0") : "00";
+    return `${h12}:${mStr} ${ampm}`;
+  }
+
+  // Selected date's day of week
+  const selectedDayOfWeek = useMemo(() => {
+    if (!date) return "";
+    const ALL_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const parsed = new Date(date + "T00:00:00");
+    if (isNaN(parsed.getTime())) return "";
+    return ALL_DAYS[parsed.getDay() === 0 ? 6 : parsed.getDay() - 1] || "";
+  }, [date]);
+
+  // Slots matching the chosen date's day of week
+  const slotsForSelectedDate = useMemo(() => {
+    if (!selectedDayOfWeek) return [];
+    return mentorSlots.filter(
+      (s: any) => (s.day_of_week || "").toLowerCase() === selectedDayOfWeek.toLowerCase() || s.day_of_week === "Flexible"
+    );
+  }, [mentorSlots, selectedDayOfWeek]);
+
+  // Auto-select first matching availability slot on date change
+  useEffect(() => {
+    if (slotsForSelectedDate.length > 0) {
+      const first = slotsForSelectedDate[0];
+      setSelectedAvailabilityId(first.availability_id);
+      setCustomTime(first.start_time || "18:00");
+    } else {
+      setSelectedAvailabilityId(null);
+    }
+  }, [slotsForSelectedDate]);
+
   // Filter mentors based on search query, category, and favorite list
   const filteredMentors = useMemo(() => {
     const userFavs = (currentUser?.favorites || []).map(String);
@@ -139,19 +197,27 @@ export default function BookingsPage() {
     setSubmitting(true);
     setStatusMsg(null);
 
+    const chosenSlot = mentorSlots.find((s) => s.availability_id === selectedAvailabilityId);
+    const timeDisplay = chosenSlot 
+      ? `${formatTime12(chosenSlot.start_time)} – ${formatTime12(chosenSlot.end_time)}`
+      : formatTime12(customTime);
+
     try {
       await apiClient.bookSession({
         mentor_id: Number(mentorId),
         skill_id: Number(skillId) || 1,
+        availability_id: selectedAvailabilityId ? Number(selectedAvailabilityId) : undefined,
         session_mode: mode,
         session_date: date,
         meeting_link: mode === "online" ? meetingLink : undefined,
         location: mode === "in_person" ? location : undefined,
-        learner_note: note || "Hi, I would love to learn together!",
+        learner_note: note.trim() 
+          ? `${note.trim()} (Preferred Time: ${timeDisplay})`
+          : `Session requested for ${timeDisplay} (${selectedDayOfWeek}).`,
       });
 
       const mName = selectedMentor?.full_name || selectedMentor?.name || "Mentor";
-      setStatusMsg({ type: "success", text: `Session request sent to ${mName}!` });
+      setStatusMsg({ type: "success", text: `Session request sent to ${mName} for ${timeDisplay}!` });
       setDate("");
       setNote("");
       setActiveTab("pending");
@@ -440,7 +506,16 @@ export default function BookingsPage() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block font-semibold text-slate-300">Session Date</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="font-semibold text-slate-300 flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5 text-cyan-400" /> Session Date
+                    </label>
+                    {selectedDayOfWeek && (
+                      <span className="text-[10px] font-bold text-cyan-300 uppercase tracking-wider">
+                        {selectedDayOfWeek}
+                      </span>
+                    )}
+                  </div>
                   <input 
                     type="date" 
                     required 
@@ -463,6 +538,68 @@ export default function BookingsPage() {
                   </select>
                 </div>
               </div>
+
+              {/* Mentor Availability Timing Options */}
+              {date && (
+                <div>
+                  <label className="mb-1.5 block font-semibold text-slate-300 flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5 text-cyan-400" /> Available Timing for {selectedDayOfWeek}
+                  </label>
+
+                  {slotsForSelectedDate.length > 0 ? (
+                    <div className="space-y-2">
+                      <div className="grid gap-2">
+                        {slotsForSelectedDate.map((slot: any) => {
+                          const isSelected = selectedAvailabilityId === slot.availability_id;
+                          const sFormatted = formatTime12(slot.start_time);
+                          const eFormatted = formatTime12(slot.end_time);
+                          return (
+                            <button
+                              key={slot.availability_id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedAvailabilityId(slot.availability_id);
+                                setCustomTime(slot.start_time || "18:00");
+                              }}
+                              className={`flex items-center justify-between rounded-2xl border p-3.5 text-xs transition cursor-pointer text-left ${
+                                isSelected
+                                  ? "border-cyan-400/50 bg-cyan-500/20 text-white font-bold shadow-sm"
+                                  : "border-white/10 bg-slate-950/70 text-slate-300 hover:bg-white/5"
+                              }`}
+                            >
+                              <div>
+                                <div className="font-bold text-cyan-200">{sFormatted} – {eFormatted}</div>
+                                <div className="text-[10px] text-slate-400 mt-0.5">{slot.day_of_week} Mentor Free Window</div>
+                              </div>
+                              <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                                isSelected ? "bg-cyan-400 text-slate-950" : "bg-white/10 text-slate-400"
+                              }`}>
+                                {isSelected ? "Selected ✓" : "Select"}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-3.5 space-y-2">
+                      <p className="text-[11px] text-amber-200">
+                        Mentor does not have fixed slots listed for {selectedDayOfWeek}. You can pick a custom time:
+                      </p>
+                      <input
+                        type="time"
+                        required
+                        value={customTime}
+                        onChange={(e) => {
+                          setCustomTime(e.target.value);
+                          setSelectedAvailabilityId(null);
+                        }}
+                        className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-xs text-white outline-none focus:border-cyan-400"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
               {mode === "in_person" ? (
                 <div>

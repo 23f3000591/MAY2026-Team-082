@@ -118,11 +118,35 @@ class MentorSearchService:
 
         availability_list = []
         for a in mentor.availabilities:
-            if a.start_time:
-                formatted_time = a.start_time.strftime("%I %p").lstrip("0")
-                availability_list.append(f"{a.day_of_week} {formatted_time}")
+            if a.start_time and a.end_time:
+                s_str = a.start_time.strftime("%I:%M %p").lstrip("0")
+                e_str = a.end_time.strftime("%I:%M %p").lstrip("0")
+                availability_list.append({
+                    "availability_id": a.availability_id,
+                    "day_of_week": a.day_of_week,
+                    "day": a.day_of_week,
+                    "start_time": a.start_time.strftime("%H:%M"),
+                    "end_time": a.end_time.strftime("%H:%M"),
+                    "time_range": f"{s_str} - {e_str}",
+                    "label": f"{a.day_of_week} ({s_str} - {e_str})",
+                })
+            elif a.start_time:
+                formatted_time = a.start_time.strftime("%I:%M %p").lstrip("0")
+                availability_list.append({
+                    "availability_id": a.availability_id,
+                    "day_of_week": a.day_of_week,
+                    "day": a.day_of_week,
+                    "start_time": a.start_time.strftime("%H:%M"),
+                    "formatted_time": formatted_time,
+                    "label": f"{a.day_of_week} {formatted_time}",
+                })
             else:
-                availability_list.append(str(a.day_of_week))
+                availability_list.append({
+                    "availability_id": a.availability_id,
+                    "day_of_week": a.day_of_week,
+                    "day": a.day_of_week,
+                    "label": str(a.day_of_week),
+                })
 
         location = (
             f"{mentor.society.society_name}, {mentor.society.city}"
@@ -421,9 +445,22 @@ class MentorSearchService:
                 if a.start_time and a.end_time:
                     s_str = a.start_time.strftime("%I:%M %p").lstrip("0")
                     e_str = a.end_time.strftime("%I:%M %p").lstrip("0")
-                    availability_list.append(f"{a.day_of_week} ({s_str} - {e_str})")
+                    availability_list.append({
+                        "availability_id": a.availability_id,
+                        "day_of_week": a.day_of_week,
+                        "day": a.day_of_week,
+                        "start_time": a.start_time.strftime("%H:%M"),
+                        "end_time": a.end_time.strftime("%H:%M"),
+                        "time_range": f"{s_str} - {e_str}",
+                        "label": f"{a.day_of_week} ({s_str} - {e_str})",
+                    })
                 else:
-                    availability_list.append(str(a.day_of_week))
+                    availability_list.append({
+                        "availability_id": a.availability_id,
+                        "day_of_week": a.day_of_week,
+                        "day": a.day_of_week,
+                        "label": str(a.day_of_week),
+                    })
 
             loc = (
                 f"{mentor.society.society_name}, {mentor.society.city}"

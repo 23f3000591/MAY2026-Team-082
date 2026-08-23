@@ -109,18 +109,22 @@ export default function MentorPage() {
     setAddingSlot(true);
     setStatusMsg(null);
     try {
-      // Add a clean recurring availability slot for primary days of this window
-      for (const day of windowItem.days.slice(0, 2)) {
-        await apiClient.addAvailability({
-          slot_type: "recurring",
-          day_of_week: day,
-          start_time: windowItem.start,
-          end_time: windowItem.end,
-        });
+      // Add a recurring availability slot for ALL days of this window
+      for (const day of windowItem.days) {
+        try {
+          await apiClient.addAvailability({
+            slot_type: "recurring",
+            day_of_week: day,
+            start_time: windowItem.start,
+            end_time: windowItem.end,
+          });
+        } catch (slotErr: any) {
+          // If overlapping or already exists, continue with remaining days
+        }
       }
       setStatusMsg({ 
         type: "success", 
-        text: `Added "${windowItem.label}" (${windowItem.sub}) to your public availability!` 
+        text: `Added "${windowItem.label}" (${windowItem.days[0]}–${windowItem.days[windowItem.days.length - 1]}, ${windowItem.sub}) to your public availability!` 
       });
       loadData();
     } catch (err: any) {

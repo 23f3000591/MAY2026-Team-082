@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Heart, MessageSquare, Star, Calendar, ShieldCheck,
   Video, MapPin as MapPinIcon, Clock, CheckCircle, AlertCircle,
-  X, Send, Loader2
+  X, Send, Loader2, Sparkles, Check
 } from "lucide-react";
 import { SiteShell } from "@/components/layout/site-shell";
 import { useAppStore } from "@/lib/store";
@@ -23,6 +23,18 @@ interface BackendReview {
   created_at: string | null;
 }
 
+interface AvailabilitySlot {
+  availability_id: number;
+  day_of_week: string;
+  start_time: string;
+  end_time: string;
+  time_range?: string;
+  label?: string;
+}
+
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+const ALL_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
 export default function MentorDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -38,23 +50,33 @@ export default function MentorDetailPage() {
   const [isAddingFavorite, setIsAddingFavorite] = useState(false);
   const [backendReviews, setBackendReviews] = useState<BackendReview[]>([]);
   const [apiMentor, setApiMentor] = useState<any>(null);
+  const [mentorSlots, setMentorSlots] = useState<AvailabilitySlot[]>([]);
 
   // --- Request Session Modal State ---
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [sessionMode, setSessionMode] = useState<"online" | "in_person">("online");
   const [sessionDate, setSessionDate] = useState("");
-  const [sessionTime, setSessionTime] = useState("10:00");
+  const [sessionTime, setSessionTime] = useState("18:00");
+  const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
   const [sessionNote, setSessionNote] = useState("");
   const [submittingSession, setSubmittingSession] = useState(false);
 
   const mentorId = typeof params?.id === "string" ? params.id : "";
   const isFavorite = currentUser?.favorites?.includes(mentorId) ?? false;
 
-  // Fetch real reviews & mentor details from backend
+  // Fetch real reviews, mentor details & availability from backend
   useEffect(() => {
     if (!mentorId) return;
     apiClient.getMentorReviews(mentorId).then((res) => {
       setBackendReviews(res.data ?? []);
+    }).catch(() => {});
+
+    // Fetch availability slots directly from availability API
+    apiClient.getMentorAvailability(mentorId).then((res: any) => {
+      const slots = res?.data ?? [];
+      if (Array.isArray(slots) && slots.length > 0) {
+        setMentorSlots(slots);
+      }
     }).catch(() => {});
 
     mentorService.getDetails(mentorId).then((res: any) => {
@@ -73,12 +95,7 @@ export default function MentorDetailPage() {
           skills: Array.isArray(data.skills)
             ? data.skills.map((s: any) => typeof s === "string" ? { name: s, skill_id: 1 } : s)
             : [],
-          availability: Array.isArray(data.availability) && data.availability.length > 0
-            ? data.availability.map((a: any) => typeof a === "string" ? { day: a, label: a } : a)
-            : [
-                { day: "Flexible", label: "By appointment" },
-                { day: "Availability", label: "Check calendar for open slots" },
-              ],
+          availability: Array.isArray(data.availability) ? data.availability : [],
         });
       }
     }).catch(() => {});
@@ -104,9 +121,88 @@ export default function MentorDetailPage() {
       price: "Flexible",
       bio: mentorUser.bio ?? "Experienced mentor helping learners grow confidently.",
       skills: mentorUser.skills ?? [],
-      availability: [{ day: "Flexible", label: "By appointment" }],
+      availability: [],
     };
   }, [mentorId, users, apiMentor]);
+
+  // Combine availability from API or mentor details
+  const allSlots: AvailabilitySlot[] = useMemo(() => {
+    if (mentorSlots.length > 0) return mentorSlots;
+    if (mentor?.availability && Array.isArray(mentor.availability)) {
+      return mentor.availability.map((a: any, idx: number) => {
+        if (typeof a === "object" && a.day_of_week) return a;
+        return {
+          availability_id: idx + 1,
+          day_of_week: a.day || a.day_of_week || "Flexible",
+          start_time: a.start_time || "18:00",
+          end_time: a.end_time || "20:30",
+          label: a.label || String(a),
+        };
+      });
+    }
+    return [];
+  }, [mentorSlots, mentor?.availability]);
+
+  // Compute summary of availability (e.g. "Monday – Friday (6:00 PM – 8:30 PM)")
+  const availabilitySummary = useMemo(() => {
+    if (allSlots.length === 0) return null;
+    
+    // Check if all 5 weekdays exist with same hours
+    const weekdaySlots = allSlots.filter((s) => WEEKDAYS.includes(s.day_of_week));
+    if (weekdaySlots.length >= 5) {
+      const first = weekdaySlots[0];
+      const allSame = weekdaySlots.every(
+        (s) => s.start_time === first.start_time && s.end_time === first.end_time
+      );
+      if (allSame) {
+        const sFormatted = formatTime12(first.start_time);
+        const eFormatted = formatTime12(first.end_time);
+        return {
+          title: "Monday – Friday (Mon to Fri)",
+          time: `${sFormatted} – ${eFormatted}`,
+          tag: "Weekday Evenings",
+        };
+      }
+    }
+    return null;
+  }, [allSlots]);
+
+  // Selected date's day of week
+  const selectedDayOfWeek = useMemo(() => {
+    if (!sessionDate) return "";
+    const parsed = new Date(sessionDate + "T00:00:00");
+    if (isNaN(parsed.getTime())) return "";
+    return ALL_DAYS[parsed.getDay() === 0 ? 6 : parsed.getDay() - 1] || "";
+  }, [sessionDate]);
+
+  // Slots matching the chosen date's day of week
+  const slotsForSelectedDate = useMemo(() => {
+    if (!selectedDayOfWeek) return [];
+    return allSlots.filter(
+      (s) => s.day_of_week.toLowerCase() === selectedDayOfWeek.toLowerCase() || s.day_of_week === "Flexible"
+    );
+  }, [allSlots, selectedDayOfWeek]);
+
+  // When date changes, auto-select matching slot if available
+  useEffect(() => {
+    if (slotsForSelectedDate.length > 0) {
+      const first = slotsForSelectedDate[0];
+      setSelectedSlotId(first.availability_id);
+      setSessionTime(first.start_time || "18:00");
+    } else {
+      setSelectedSlotId(null);
+    }
+  }, [slotsForSelectedDate]);
+
+  function formatTime12(timeStr: string) {
+    if (!timeStr) return "";
+    const [h, m] = timeStr.split(":").map(Number);
+    if (isNaN(h)) return timeStr;
+    const ampm = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 || 12;
+    const mStr = m !== undefined ? String(m).padStart(2, "0") : "00";
+    return `${h12}:${mStr} ${ampm}`;
+  }
 
   const mentorReviews = backendReviews;
 
@@ -124,7 +220,12 @@ export default function MentorDetailPage() {
 
     setSubmittingSession(true);
     const modeLabel = sessionMode === "online" ? "online (video call)" : "in-person";
-    const formattedMsg = `Hi ${mentor.name}, I'd like to schedule a ${modeLabel} session on ${sessionDate} at ${sessionTime}.${sessionNote.trim() ? ` Note: ${sessionNote.trim()}` : ""}`;
+    const chosenSlot = allSlots.find((s) => s.availability_id === selectedSlotId);
+    const timeDisplay = chosenSlot 
+      ? `${formatTime12(chosenSlot.start_time)} – ${formatTime12(chosenSlot.end_time)}`
+      : formatTime12(sessionTime);
+
+    const formattedMsg = `Hi ${mentor.name}, I'd like to schedule a ${modeLabel} session on ${sessionDate} (${selectedDayOfWeek}) at ${timeDisplay}.${sessionNote.trim() ? ` Note: ${sessionNote.trim()}` : ""}`;
 
     try {
       // 1. Book the session via API
@@ -132,10 +233,11 @@ export default function MentorDetailPage() {
       await apiClient.bookSession({
         mentor_id: Number(mentor.id),
         skill_id: skillId,
+        availability_id: selectedSlotId ? Number(selectedSlotId) : undefined,
         session_mode: sessionMode,
         session_date: sessionDate,
         meeting_link: sessionMode === "online" ? "https://meet.jit.si/NSEP-Session" : undefined,
-        learner_note: sessionNote.trim() || `Session request at ${sessionTime}.`,
+        learner_note: sessionNote.trim() ? `${sessionNote.trim()} (Time: ${timeDisplay})` : `Session request for ${timeDisplay} (${selectedDayOfWeek}).`,
       });
 
       // 2. Send formatted chat message to mentor
@@ -226,7 +328,7 @@ export default function MentorDetailPage() {
       <div className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
         {/* Back */}
         <div className="mb-6 flex items-center gap-3 text-sm text-cyan-300">
-          <button className="rounded-full border border-white/10 bg-slate-900/70 px-3 py-2" onClick={() => router.back()}>
+          <button className="rounded-full border border-white/10 bg-slate-900/70 px-3 py-2 cursor-pointer hover:bg-white/10 transition" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4" />
           </button>
           <Link href="/search" className="hover:text-white">Back to search</Link>
@@ -250,7 +352,7 @@ export default function MentorDetailPage() {
             {/* Left: Bio */}
             <div>
               <div className="flex items-center gap-4">
-                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-violet-500 text-2xl font-bold text-white">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-violet-500 text-2xl font-bold text-white shadow-lg">
                   {mentor.name?.charAt(0)}
                 </div>
                 <div>
@@ -263,7 +365,7 @@ export default function MentorDetailPage() {
               </div>
               <div className="mt-5 flex flex-wrap gap-2">
                 {mentor.skills.map((skill: any) => (
-                  <span key={skill.name || skill} className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-300">
+                  <span key={skill.name || skill.skill_name || skill} className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-300">
                     {skill.name || skill.skill_name || skill}
                   </span>
                 ))}
@@ -346,21 +448,84 @@ export default function MentorDetailPage() {
           </div>
         </section>
 
-        {/* Availability */}
+        {/* Availability Section */}
         <section className="mt-8 rounded-[2rem] border border-white/10 bg-slate-900/70 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.35)] backdrop-blur-xl">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white">Availability</h2>
-            <div className="text-xs text-slate-400">Select a slot when requesting a session</div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                <Clock className="h-5 w-5 text-cyan-400" /> Mentor Availability
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">Available days and hours for 1-on-1 learning sessions</p>
+            </div>
+            <button
+              onClick={() => {
+                if (!currentUser) { showMsg("error", "Please log in to request a session."); return; }
+                setShowSessionModal(true);
+              }}
+              className="rounded-full bg-cyan-500/20 border border-cyan-400/30 px-4 py-1.5 text-xs font-bold text-cyan-300 hover:bg-cyan-500/30 transition cursor-pointer self-start sm:self-auto"
+            >
+              Book Available Slot →
+            </button>
           </div>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            {mentor.availability.map((slot: any) => (
-              <div key={slot.label || slot.day || slot} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div className="font-semibold text-white">{slot.day_of_week || slot.day || slot}</div>
-                <div className="mt-1 text-xs text-slate-400">
-                  {slot.start_time && slot.end_time ? `${slot.start_time} – ${slot.end_time}` : slot.label || slot.day || slot}
+
+          {/* Weekday Summary Banner if Mon-Fri */}
+          {availabilitySummary && (
+            <div className="mt-6 rounded-2xl border border-cyan-400/30 bg-gradient-to-r from-cyan-500/15 via-teal-500/10 to-indigo-500/15 p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-400/20 text-cyan-300">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-cyan-300">{availabilitySummary.tag}</div>
+                  <div className="text-sm font-bold text-white mt-0.5">{availabilitySummary.title} · {availabilitySummary.time}</div>
                 </div>
               </div>
-            ))}
+              <span className="rounded-full bg-emerald-500/20 border border-emerald-500/30 px-3 py-1 text-xs font-semibold text-emerald-300 hidden sm:inline-block">
+                ✓ Regular Weekday Free Hours
+              </span>
+            </div>
+          )}
+
+          {/* Grid of Days */}
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {allSlots.length === 0 ? (
+              <div className="col-span-full rounded-2xl border border-white/5 bg-white/5 p-6 text-center text-xs text-slate-400">
+                Flexible availability by appointment. Click "Request Session" to specify your preferred date & time.
+              </div>
+            ) : (
+              allSlots.map((slot) => {
+                const sFormatted = formatTime12(slot.start_time);
+                const eFormatted = formatTime12(slot.end_time);
+                const timeText = sFormatted && eFormatted ? `${sFormatted} – ${eFormatted}` : slot.time_range || slot.label;
+                return (
+                  <div
+                    key={`${slot.day_of_week}-${slot.availability_id || slot.start_time}`}
+                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4 hover:border-cyan-400/30 transition"
+                  >
+                    <div>
+                      <div className="font-bold text-white text-xs flex items-center gap-1.5">
+                        <span>{slot.day_of_week}</span>
+                        {WEEKDAYS.includes(slot.day_of_week) && (
+                          <span className="rounded bg-cyan-400/10 px-1.5 py-0.2 text-[9px] font-semibold text-cyan-300">Weekday</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-300 font-medium mt-1">{timeText}</div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (!currentUser) { showMsg("error", "Please log in to request a session."); return; }
+                        setSelectedSlotId(slot.availability_id);
+                        setSessionTime(slot.start_time || "18:00");
+                        setShowSessionModal(true);
+                      }}
+                      className="rounded-full bg-white/5 hover:bg-cyan-500/20 hover:text-cyan-300 border border-white/10 px-3 py-1 text-[11px] font-semibold text-slate-300 transition cursor-pointer"
+                    >
+                      Book
+                    </button>
+                  </div>
+                );
+              })
+            )}
           </div>
         </section>
 
@@ -425,10 +590,10 @@ export default function MentorDetailPage() {
       {/* ====== Request Session Modal ====== */}
       {showSessionModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-900 p-6 sm:p-8 shadow-2xl">
-            <div className="flex items-center justify-between mb-5">
+          <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-900 p-6 sm:p-8 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div>
-                <h3 className="text-lg font-bold text-white">Request a Session</h3>
+                <h3 className="text-lg font-bold text-white">Schedule 1-on-1 Session</h3>
                 <p className="text-xs text-slate-400 mt-0.5">with <span className="text-cyan-300 font-semibold">{mentor.name}</span></p>
               </div>
               <button onClick={() => setShowSessionModal(false)} className="rounded-full bg-white/5 p-1.5 text-slate-400 hover:text-white cursor-pointer">
@@ -436,15 +601,15 @@ export default function MentorDetailPage() {
               </button>
             </div>
 
-            <form onSubmit={handleRequestSession} className="space-y-4">
+            <form onSubmit={handleRequestSession} className="space-y-4 text-xs text-slate-300">
               {/* Mode */}
               <div>
-                <label className="mb-2 block text-xs font-semibold text-slate-300">Session Mode</label>
+                <label className="mb-1.5 block font-semibold text-slate-300">Session Mode</label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setSessionMode("online")}
-                    className={`flex items-center justify-center gap-2 rounded-xl border py-3 text-xs font-semibold transition cursor-pointer ${
+                    className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-xs font-semibold transition cursor-pointer ${
                       sessionMode === "online"
                         ? "border-cyan-400/50 bg-cyan-500/20 text-cyan-300"
                         : "border-white/10 bg-white/5 text-slate-400 hover:bg-white/10"
@@ -455,81 +620,139 @@ export default function MentorDetailPage() {
                   <button
                     type="button"
                     onClick={() => setSessionMode("in_person")}
-                    className={`flex items-center justify-center gap-2 rounded-xl border py-3 text-xs font-semibold transition cursor-pointer ${
+                    className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-xs font-semibold transition cursor-pointer ${
                       sessionMode === "in_person"
                         ? "border-teal-400/50 bg-teal-500/20 text-teal-300"
                         : "border-white/10 bg-white/5 text-slate-400 hover:bg-white/10"
                     }`}
                   >
-                    <MapPinIcon className="h-4 w-4" /> In-Person
+                    <MapPinIcon className="h-4 w-4" /> In-Person (Clubhouse)
                   </button>
                 </div>
               </div>
 
               {/* Date */}
               <div>
-                <label className="mb-1.5 block text-xs font-semibold text-slate-300">
-                  <Calendar className="inline h-3.5 w-3.5 mr-1 text-cyan-400" />Preferred Date
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="font-semibold text-slate-300 flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5 text-cyan-400" /> Session Date
+                  </label>
+                  {selectedDayOfWeek && (
+                    <span className="text-[11px] font-bold text-cyan-300 uppercase tracking-wider">
+                      {selectedDayOfWeek}
+                    </span>
+                  )}
+                </div>
                 <input
                   type="date"
                   required
                   min={new Date().toISOString().split("T")[0]}
                   value={sessionDate}
                   onChange={(e) => setSessionDate(e.target.value)}
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-xs text-white outline-none focus:border-cyan-400"
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-2.5 text-xs text-white outline-none focus:border-cyan-400"
                 />
               </div>
 
-              {/* Time */}
+              {/* Timing Options from Mentor Availability */}
               <div>
-                <label className="mb-1.5 block text-xs font-semibold text-slate-300">
-                  <Clock className="inline h-3.5 w-3.5 mr-1 text-cyan-400" />Preferred Time
+                <label className="mb-1.5 block font-semibold text-slate-300 flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5 text-cyan-400" /> Timing / Time Slot
                 </label>
-                <input
-                  type="time"
-                  required
-                  value={sessionTime}
-                  onChange={(e) => setSessionTime(e.target.value)}
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-xs text-white outline-none focus:border-cyan-400"
-                />
+
+                {slotsForSelectedDate.length > 0 ? (
+                  <div className="space-y-2">
+                    <span className="text-[11px] text-emerald-300 font-semibold flex items-center gap-1">
+                      <Check className="h-3 w-3" /> Mentor is available on {selectedDayOfWeek}:
+                    </span>
+                    <div className="grid gap-2">
+                      {slotsForSelectedDate.map((slot) => {
+                        const isSelected = selectedSlotId === slot.availability_id;
+                        const sFormatted = formatTime12(slot.start_time);
+                        const eFormatted = formatTime12(slot.end_time);
+                        return (
+                          <button
+                            key={slot.availability_id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedSlotId(slot.availability_id);
+                              setSessionTime(slot.start_time || "18:00");
+                            }}
+                            className={`flex items-center justify-between rounded-xl border p-3 text-xs transition cursor-pointer text-left ${
+                              isSelected
+                                ? "border-cyan-400/50 bg-cyan-500/20 text-white font-bold shadow-sm"
+                                : "border-white/10 bg-slate-950/70 text-slate-300 hover:bg-white/5"
+                            }`}
+                          >
+                            <div>
+                              <div className="font-bold text-cyan-200">{sFormatted} – {eFormatted}</div>
+                              <div className="text-[10px] text-slate-400 mt-0.5">{slot.day_of_week} Free Window</div>
+                            </div>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                              isSelected ? "bg-cyan-400 text-slate-950" : "bg-white/10 text-slate-400"
+                            }`}>
+                              {isSelected ? "Selected ✓" : "Choose"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 space-y-2">
+                    <p className="text-[11px] text-amber-200">
+                      Mentor has not listed specific fixed slots for {selectedDayOfWeek || "this day"}. You can choose a custom time:
+                    </p>
+                    <input
+                      type="time"
+                      required
+                      value={sessionTime}
+                      onChange={(e) => {
+                        setSessionTime(e.target.value);
+                        setSelectedSlotId(null);
+                      }}
+                      className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-xs text-white outline-none focus:border-cyan-400"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Note */}
               <div>
-                <label className="mb-1.5 block text-xs font-semibold text-slate-300">Note for Mentor <span className="text-slate-500">(optional)</span></label>
+                <label className="mb-1.5 block font-semibold text-slate-300">Learning Goals / Note <span className="text-slate-500">(optional)</span></label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={sessionNote}
                   onChange={(e) => setSessionNote(e.target.value)}
-                  placeholder="What do you want to learn or discuss?"
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-xs text-white outline-none focus:border-cyan-400"
+                  placeholder="e.g. Guidance on conversational practice, homework review..."
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-2.5 text-xs text-white outline-none focus:border-cyan-400"
                 />
               </div>
 
-              {/* Preview */}
-              <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/5 px-4 py-3 text-xs text-cyan-300 italic">
-                Message preview: "Hi {mentor.name}, I'd like to schedule a{" "}
+              {/* Live Preview */}
+              <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/5 p-3 text-[11px] text-cyan-300 italic">
+                Preview: "Hi {mentor.name}, I'd like to schedule a{" "}
                 {sessionMode === "online" ? "online (video call)" : "in-person"} session on{" "}
-                {sessionDate || "—"} at {sessionTime}.
-                {sessionNote.trim() ? ` Note: ${sessionNote.trim()}` : ""}"
+                {sessionDate || "—"} ({selectedDayOfWeek}) at{" "}
+                {selectedSlotId && allSlots.find((s) => s.availability_id === selectedSlotId)
+                  ? `${formatTime12(allSlots.find((s) => s.availability_id === selectedSlotId)!.start_time)} – ${formatTime12(allSlots.find((s) => s.availability_id === selectedSlotId)!.end_time)}`
+                  : formatTime12(sessionTime)}."
               </div>
 
-              <div className="flex gap-3 pt-1">
+              <div className="flex gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowSessionModal(false)}
-                  className="flex-1 rounded-full border border-white/10 bg-white/5 py-3 text-xs font-semibold text-slate-300 hover:bg-white/10 transition cursor-pointer"
+                  className="flex-1 rounded-full border border-white/10 bg-white/5 py-2.5 text-xs font-semibold text-slate-300 hover:bg-white/10 transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submittingSession}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 py-3 text-xs font-bold text-white shadow-md hover:brightness-110 transition cursor-pointer disabled:opacity-50"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 py-2.5 text-xs font-bold text-white shadow-md hover:brightness-110 transition cursor-pointer disabled:opacity-50"
                 >
                   {submittingSession ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                  {submittingSession ? "Sending..." : "Send Request"}
+                  {submittingSession ? "Sending..." : "Confirm & Send"}
                 </button>
               </div>
             </form>
