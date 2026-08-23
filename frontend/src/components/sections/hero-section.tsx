@@ -38,8 +38,18 @@ export function HeroSection() {
             <Button asChild variant="primary" size="lg">
               <Link href="/auth/login">Join the community <ArrowRight className="h-4 w-4" /></Link>
             </Button>
-            <Button asChild variant="secondary" size="lg">
-              <Link href="/search"><PlayCircle className="h-4 w-4" /> Explore platform</Link>
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={() => {
+                const el = document.getElementById("features");
+                if (el) {
+                  el.scrollIntoView({ behavior: "smooth" });
+                }
+              }}
+              className="cursor-pointer"
+            >
+              <PlayCircle className="h-4 w-4" /> Explore platform
             </Button>
           </div>
           <div className="flex flex-wrap gap-6 text-sm text-[var(--text-secondary)]">
