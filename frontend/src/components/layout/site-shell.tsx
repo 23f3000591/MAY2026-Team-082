@@ -88,6 +88,7 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
     router.push("/auth/login");
   };
 
+  const userRole = (currentUser?.role?.toLowerCase() ?? "learner");
   const isMentorUser = userRole === "mentor" || Boolean(currentUser?.is_mentor);
 
   // Streamlined and consolidated navigation tabs
