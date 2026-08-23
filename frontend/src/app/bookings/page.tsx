@@ -23,7 +23,8 @@ import {
   CalendarCheck,
   Search,
   UserCheck,
-  Heart
+  Heart,
+  CheckCircle2
 } from "lucide-react";
 import { SiteShell } from "@/components/layout/site-shell";
 import { useAppStore } from "@/lib/store";
@@ -204,7 +205,18 @@ export default function BookingsPage() {
       const refresh = await apiClient.getBookingHistory();
       setLiveSessions(refresh.data ?? []);
     } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to submit review.");
+      const status = err?.response?.status;
+      const errMsg = err?.response?.data?.message || err.message || "Failed to submit review.";
+      if (status === 409) {
+        // Already reviewed - close modal and show info message
+        setReviewModalSession(null);
+        setStatusMsg({ type: "success", text: "You've already submitted feedback for this session." });
+        // Refresh to get updated has_review flag
+        const refresh = await apiClient.getBookingHistory();
+        setLiveSessions(refresh.data ?? []);
+      } else {
+        setStatusMsg({ type: "error", text: errMsg });
+      }
     } finally {
       setSubmittingReview(false);
     }
@@ -678,12 +690,18 @@ export default function BookingsPage() {
 
                           {activeTab === "completed" && (
                             <>
-                              <button
-                                onClick={() => setReviewModalSession(s)}
-                                className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 px-3.5 py-1.5 text-xs font-bold text-white hover:brightness-110 transition cursor-pointer shadow-sm"
-                              >
-                                <Star className="h-3.5 w-3.5 fill-white" /> Rate Mentor
-                              </button>
+                              {s.has_review ? (
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 text-xs font-semibold text-emerald-300">
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> Reviewed
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => setReviewModalSession(s)}
+                                  className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 px-3.5 py-1.5 text-xs font-bold text-white hover:brightness-110 transition cursor-pointer shadow-sm"
+                                >
+                                  <Star className="h-3.5 w-3.5 fill-white" /> Rate Mentor
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleBookAgain(s)}
                                 className="inline-flex items-center gap-1 rounded-full bg-white/5 border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/10 transition ml-auto cursor-pointer"

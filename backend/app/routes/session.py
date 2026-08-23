@@ -1,6 +1,7 @@
 from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import jwt_required
 
+from app.models.review import Review
 from app.services.session_service import (
     ValidationError,
     book_session_service,
@@ -44,6 +45,10 @@ def _serialize_session(session):
         "location": session.location,
         "status": session.status,
         "learner_note": session.learner_note,
+        "has_review": Review.query.filter_by(
+            session_id=session.session_id,
+            learner_id=session.learner_id,
+        ).first() is not None,
         "created_at": session.created_at.isoformat() if session.created_at else None,
         "updated_at": session.updated_at.isoformat() if session.updated_at else None,
     }
