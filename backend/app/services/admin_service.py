@@ -48,7 +48,7 @@ def get_users_service(filters):
     if not admin:
         raise ResourceNotFoundError("Admin not found.")
 
-    if admin.role != "admin":
+    if (admin.role or "").lower() != "admin":
         raise AuthorizationError("Only administrators can view users.")
 
     query = User.query
@@ -117,7 +117,7 @@ def get_user_details_service(user_id):
     if not admin:
         raise ResourceNotFoundError("Admin not found.")
 
-    if admin.role != "admin":
+    if (admin.role or "").lower() != "admin":
         raise AuthorizationError("Only administrators can view user details.")
 
     user = db.session.get(User, user_id)
@@ -151,7 +151,7 @@ def update_user_suspension_service(user_id, data):
     if not admin:
         raise ResourceNotFoundError("Admin not found.")
 
-    if admin.role != "admin":
+    if (admin.role or "").lower() != "admin":
         raise AuthorizationError(
             "Only administrators can update user suspension status."
         )
@@ -218,7 +218,7 @@ def update_mentor_verification_service(user_id, data):
     if not admin:
         raise ResourceNotFoundError("Admin not found.")
 
-    if admin.role != "admin":
+    if (admin.role or "").lower() != "admin":
         raise AuthorizationError("Only administrators can update mentor verification.")
 
     try:
@@ -275,7 +275,7 @@ def get_reports_service(args):
     if not admin:
         raise ResourceNotFoundError("Admin not found.")
 
-    if admin.role != "admin":
+    if (admin.role or "").lower() != "admin":
         raise AuthorizationError("Only administrators can view reports.")
 
     query = Report.query
@@ -329,7 +329,7 @@ def get_report_details_service(report_id):
     if not admin:
         raise ResourceNotFoundError("Admin not found.")
 
-    if admin.role != "admin":
+    if (admin.role or "").lower() != "admin":
         raise AuthorizationError("Only administrators can view reports.")
 
     try:
@@ -357,7 +357,7 @@ def resolve_report_service(report_id, data=None):
     if not admin:
         raise ResourceNotFoundError("Admin not found.")
 
-    if admin.role != "admin":
+    if (admin.role or "").lower() != "admin":
         raise AuthorizationError("Only administrators can resolve reports.")
 
     try:
@@ -412,7 +412,7 @@ def dismiss_report_service(report_id, data=None):
     if not admin:
         raise ResourceNotFoundError("Admin not found.")
 
-    if admin.role != "admin":
+    if (admin.role or "").lower() != "admin":
         raise AuthorizationError("Only administrators can dismiss reports.")
 
     try:
@@ -467,7 +467,7 @@ def get_platform_activity_service():
     if not admin:
         raise ResourceNotFoundError("Admin not found.")
 
-    if admin.role != "admin":
+    if (admin.role or "").lower() != "admin":
         raise AuthorizationError("Only administrators can monitor platform activity.")
 
     total_users = User.query.count()

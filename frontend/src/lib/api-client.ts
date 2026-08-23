@@ -130,7 +130,9 @@ class ApiClient {
   }
 
   async addSkill(data: {
-    skill_id: number | string;
+    skill_id?: number | string;
+    skill_name?: string;
+    category?: string;
     experience_level: string;
     years_of_experience?: number;
     description?: string;
@@ -141,6 +143,11 @@ class ApiClient {
 
   async deleteSkill(skillId: number | string) {
     const response = await this.client.delete(`/profile/skills/${skillId}`);
+    return response.data;
+  }
+
+  async getRegisteredSkills() {
+    const response = await this.client.get('/profile/skills');
     return response.data;
   }
 
@@ -221,7 +228,7 @@ class ApiClient {
     mentor_id: string | number;
     skill_id: string | number;
     availability_id?: string | number;
-    session_mode: 'online' | 'in-person';
+    session_mode: 'online' | 'in_person' | 'in-person';
     session_date: string;
     meeting_link?: string;
     location?: string;
@@ -429,6 +436,21 @@ class ApiClient {
 
   async getPlatformActivity() {
     const response = await this.client.get('/admin/activity');
+    return response.data;
+  }
+
+  async getAdminSkills() {
+    const response = await this.client.get('/admin/skills');
+    return response.data;
+  }
+
+  async createAdminSkill(data: { skill_name: string; category: string }) {
+    const response = await this.client.post('/admin/skills', data);
+    return response.data;
+  }
+
+  async updateAdminSkillCategory(skillId: number, category: string) {
+    const response = await this.client.put(`/admin/skills/${skillId}/category`, { category });
     return response.data;
   }
 

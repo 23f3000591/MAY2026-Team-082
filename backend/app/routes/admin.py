@@ -724,3 +724,69 @@ def get_platform_activity():
             ),
             500,
         )
+
+
+@admin_bp.route("/skills", methods=["GET"])
+@jwt_required()
+def admin_get_skills():
+    """GET /api/admin/skills -> List all skills and category counts"""
+    from app.models.skill import Skill
+    skills = Skill.query.all()
+    return jsonify({
+        "status": "success",
+        "data": [
+            {
+                "skill_id": s.skill_id,
+                "skill_name": s.skill_name,
+                "category": s.category,
+                "teachers_count": len(s.user_skills),
+            }
+            for s in skills
+        ]
+    }), 200
+
+
+@admin_bp.route("/skills", methods=["POST"])
+@jwt_required()
+def admin_create_skill():
+    """POST /api/admin/skills -> Create a new verified skill with category"""
+    from app.models.skill import Skill
+    from app.extensions import db
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("skill_name", "")).strip()
+    category = str(data.get("category", "General")).strip()
+    if not name:
+        return jsonify({"status": "error", "message": "skill_name is required"}), 400
+    existing = Skill.query.filter(Skill.skill_name.ilike(name)).first()
+    if existing:
+        return jsonify({"status": "error", "message": "Skill already exists"}), 409
+    new_skill = Skill(skill_name=name, category=category)
+    db.session.add(new_skill)
+    db.session.commit()
+    return jsonify({
+        "status": "success",
+        "message": f"Skill '{name}' created under category '{category}'",
+        "data": {"skill_id": new_skill.skill_id, "skill_name": new_skill.skill_name, "category": new_skill.category}
+    }), 201
+
+
+@admin_bp.route("/skills/<int:skill_id>/category", methods=["PUT"])
+@jwt_required()
+def admin_update_skill_category(skill_id):
+    """PUT /api/admin/skills/<skill_id>/category -> Change category of a skill"""
+    from app.models.skill import Skill
+    from app.extensions import db
+    data = request.get_json(silent=True) or {}
+    category = str(data.get("category", "")).strip()
+    if not category:
+        return jsonify({"status": "error", "message": "category is required"}), 400
+    skill = db.session.get(Skill, skill_id)
+    if not skill:
+        return jsonify({"status": "error", "message": "Skill not found"}), 404
+    skill.category = category
+    db.session.commit()
+    return jsonify({
+        "status": "success",
+        "message": f"Skill '{skill.skill_name}' reclassified to '{category}'",
+        "data": {"skill_id": skill.skill_id, "skill_name": skill.skill_name, "category": skill.category}
+    }), 200

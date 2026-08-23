@@ -157,14 +157,16 @@ def add_skill_service(data):
         raise ValidationError("Request body must be a valid JSON object.")
 
     skill_id = data.get("skill_id")
+    skill_name = data.get("skill_name")
+    category = data.get("category", "General")
     experience_level = data.get("experience_level")
     years_of_experience = data.get("years_of_experience")
     description = data.get("description")
 
     missing_fields = []
 
-    if skill_id is None:
-        missing_fields.append("skill_id")
+    if skill_id is None and not skill_name:
+        missing_fields.append("skill_id or skill_name")
 
     if not experience_level or not str(experience_level).strip():
         missing_fields.append("experience_level")
@@ -175,18 +177,20 @@ def add_skill_service(data):
         )
 
     skill = None
-    try:
-        skill_int_id = int(skill_id)
-        skill = db.session.get(Skill, skill_int_id)
-    except (ValueError, TypeError):
-        pass
+    if skill_id is not None:
+        try:
+            skill_int_id = int(skill_id)
+            skill = db.session.get(Skill, skill_int_id)
+        except (ValueError, TypeError):
+            pass
 
     if not skill:
-        skill_name_str = str(skill_id).strip()
+        skill_name_str = str(skill_name or skill_id).strip()
         skill = Skill.query.filter(Skill.skill_name.ilike(skill_name_str)).first()
         if not skill:
-            # Dynamically create skill if it doesn't exist
-            skill = Skill(skill_name=skill_name_str, category="General")
+            # Dynamically create skill with user-chosen category
+            cat_str = str(category).strip() if category else "General"
+            skill = Skill(skill_name=skill_name_str, category=cat_str)
             db.session.add(skill)
             db.session.flush()
 
@@ -253,10 +257,19 @@ def get_mentor_profile_service(user_id):
     ratings = [review.rating for review in user.reviews_received]
     average_rating = round(sum(ratings) / len(ratings), 2) if ratings else None
 
+    location = (
+        f"{user.society.society_name}, {user.society.city}"
+        if user.society and user.society.society_name and user.society.city
+        else user.society.society_name if user.society and user.society.society_name
+        else user.society.city if user.society and user.society.city
+        else ""
+    )
+
     return {
         "user_id": user.user_id,
         "full_name": user.full_name,
         "bio": user.bio,
+        "location": location,
         "profile_image": user.profile_image,
         "is_mentor": user.is_mentor,
         "is_learner": user.is_learner,
@@ -293,10 +306,19 @@ def get_learner_profile_service(user_id):
         for user_skill in user.user_skills
     ]
 
+    location = (
+        f"{user.society.society_name}, {user.society.city}"
+        if user.society and user.society.society_name and user.society.city
+        else user.society.society_name if user.society and user.society.society_name
+        else user.society.city if user.society and user.society.city
+        else ""
+    )
+
     return {
         "user_id": user.user_id,
         "full_name": user.full_name,
         "bio": user.bio,
+        "location": location,
         "profile_image": user.profile_image,
         "is_mentor": user.is_mentor,
         "is_learner": user.is_learner,

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Heart, MessageSquare, Star, AlertCircle } from "lucide-react";
+import { ArrowLeft, Heart, MessageSquare, Star, AlertCircle, Calendar, ShieldCheck } from "lucide-react";
 import { SiteShell } from "@/components/layout/site-shell";
 import { useAppStore } from "@/lib/store";
 import { mentorService } from "@/lib/services/mentor-service";
@@ -186,22 +186,33 @@ export default function MentorDetailPage() {
     }
     
     setIsAddingFavorite(true);
+    const mIdStr = String(mentor.id);
+    const currentFavs = (currentUser.favorites || []).map(String);
+    const currentlyFav = currentFavs.includes(mIdStr);
+
     try {
-      if (isFavorite) {
+      if (currentlyFav) {
         // Call backend to remove favorite
-        await mentorService.removeFromFavorites(mentor.id);
-        removeFavoriteMentor(mentor.id);
+        try {
+          await mentorService.removeFromFavorites(mIdStr);
+        } catch (apiErr: any) {
+          if (apiErr?.response?.status !== 404) throw apiErr;
+        }
+        removeFavoriteMentor(mIdStr);
         setMessage("Removed from favorites.");
       } else {
         // Call backend to add favorite
-        await mentorService.addToFavorites(mentor.id);
-        addFavoriteMentor(mentor.id);
+        try {
+          await mentorService.addToFavorites(mIdStr);
+        } catch (apiErr: any) {
+          if (apiErr?.response?.status !== 409) throw apiErr;
+        }
+        addFavoriteMentor(mIdStr);
         setMessage("Mentor added to favorites.");
       }
     } catch (error: any) {
-      const errorMsg = error.message || "Failed to update favorites";
+      const errorMsg = error?.response?.data?.message || error.message || "Failed to update favorites";
       setMessage(errorMsg);
-      console.error("Error updating favorite:", error);
     } finally {
       setIsAddingFavorite(false);
     }
@@ -246,23 +257,54 @@ export default function MentorDetailPage() {
             <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/70 p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-xs uppercase tracking-[0.35em] text-cyan-300">Connect</div>
-                  <div className="mt-2 text-3xl font-semibold text-white">{mentor.rating}/5</div>
+                  <div className="text-xs uppercase tracking-[0.35em] text-cyan-300">Community Credibility</div>
+                  {mentor.reviews > 0 ? (
+                    <div className="mt-2 text-3xl font-semibold text-white">{mentor.rating}/5</div>
+                  ) : (
+                    <div className="mt-2 text-xl font-bold text-cyan-300">New Mentor</div>
+                  )}
                 </div>
-                <div className="rounded-full bg-white/5 px-3 py-1 text-sm text-slate-300">{mentor.reviews} reviews</div>
+                <div className="rounded-full bg-white/5 px-3 py-1 text-sm text-slate-300">
+                  {mentor.reviews > 0 ? `${mentor.reviews} reviews` : "0 reviews yet"}
+                </div>
               </div>
               <div className="mt-6 grid gap-3 text-sm text-slate-400">
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-4">Location: {mentor.location}</div>
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-4">Experience: {mentor.experience}</div>
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-4">Price: {mentor.price}</div>
               </div>
-              <div className="mt-6 space-y-3">
-                <button className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan-500 to-violet-500 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50" onClick={handleAddFavorite} disabled={isAddingFavorite}>
-                  <Heart className={`h-4 w-4 ${isFavorite ? "fill-white" : ""}`} /> {isAddingFavorite ? "Updating..." : isFavorite ? "Remove from favorites" : "Add to favorites"}
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handleRequestSession}
+                  className="rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-indigo-500 px-5 py-2.5 text-xs font-bold text-white shadow-lg transition hover:brightness-110 cursor-pointer flex items-center gap-1.5"
+                >
+                  <Calendar className="h-4 w-4" /> Request Session
                 </button>
-                <button className="flex w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white" onClick={handleRequestSession}>
-                  <MessageSquare className="h-4 w-4 text-cyan-300" /> Request session
+                <button
+                  onClick={handleSendMessage}
+                  className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-5 py-2.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-400/20 transition cursor-pointer flex items-center gap-1.5"
+                >
+                  <MessageSquare className="h-4 w-4" /> Message Mentor
                 </button>
+                <button
+                  onClick={handleAddFavorite}
+                  disabled={isAddingFavorite}
+                  className={`rounded-full border px-4 py-2.5 text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                    isFavorite
+                      ? "border-pink-500/40 bg-pink-500/20 text-pink-300 hover:bg-pink-500/30"
+                      : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                  }`}
+                >
+                  <Heart className={`h-4 w-4 ${isFavorite ? "fill-pink-400 text-pink-400" : ""}`} />
+                  {isFavorite ? "Saved in Favorites" : "Save Mentor"}
+                </button>
+                <Link
+                  href="/messages?to=1&name=Society%20Admin"
+                  className="rounded-full border border-purple-400/20 bg-purple-400/10 px-4 py-2.5 text-xs font-semibold text-purple-300 hover:bg-purple-400/20 transition flex items-center gap-1.5"
+                  title="Contact Society Administrator regarding this mentor or profile verification"
+                >
+                  <ShieldCheck className="h-4 w-4" /> Message Admin
+                </Link>
               </div>
               <div className="mt-6 space-y-3">
                 <label className="block text-sm text-slate-300">

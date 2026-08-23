@@ -86,6 +86,9 @@ export default function AdminPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [reports, setReports] = useState<AdminReport[]>([]);
   const [activity, setActivity] = useState<PlatformActivityData | null>(null);
+  const [adminSkills, setAdminSkills] = useState<any[]>([]);
+  const [newAdminSkillName, setNewAdminSkillName] = useState("");
+  const [newAdminSkillCategory, setNewAdminSkillCategory] = useState("Technology");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -95,10 +98,11 @@ export default function AdminPage() {
     else setLoading(true);
 
     try {
-      const [usersRes, reportsRes, activityRes] = await Promise.allSettled([
+      const [usersRes, reportsRes, activityRes, skillsRes] = await Promise.allSettled([
         apiClient.getAdminUsers(),
         apiClient.getAdminReports(),
         apiClient.getPlatformActivity(),
+        apiClient.getAdminSkills(),
       ]);
 
       if (usersRes.status === "fulfilled" && usersRes.value?.data) {
@@ -109,6 +113,9 @@ export default function AdminPage() {
       }
       if (activityRes.status === "fulfilled" && activityRes.value?.data) {
         setActivity(activityRes.value.data);
+      }
+      if (skillsRes.status === "fulfilled" && skillsRes.value?.data) {
+        setAdminSkills(skillsRes.value.data);
       }
     } catch (err: any) {
       setFeedback({
@@ -496,6 +503,123 @@ export default function AdminPage() {
                       </div>
                     ))
                   )}
+                </div>
+              </div>
+
+              {/* Section: Community Skills & Category Taxonomy Manager */}
+              <div className="rounded-[2rem] border border-white/10 bg-slate-900/70 p-6 sm:p-8 shadow-xl backdrop-blur-xl space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                      <Layers className="h-5 w-5 text-teal-400" /> Community Skills & Category Taxonomy
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Manage official skill categories, reclassify neighborhood skills, or add new community domains.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Add New Skill Form */}
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!newAdminSkillName.trim()) return;
+                    try {
+                      await apiClient.createAdminSkill({
+                        skill_name: newAdminSkillName.trim(),
+                        category: newAdminSkillCategory,
+                      });
+                      flash(`Skill "${newAdminSkillName}" added under ${newAdminSkillCategory}!`, "success");
+                      setNewAdminSkillName("");
+                      const res = await apiClient.getAdminSkills();
+                      if (res?.data) setAdminSkills(res.data);
+                    } catch (err: any) {
+                      flash(err?.response?.data?.message || "Failed to create skill", "error");
+                    }
+                  }}
+                  className="flex flex-col sm:flex-row gap-3 rounded-2xl border border-white/10 bg-slate-950/70 p-4"
+                >
+                  <input
+                    type="text"
+                    required
+                    placeholder="New skill name (e.g. Robotics, French A1)"
+                    value={newAdminSkillName}
+                    onChange={(e) => setNewAdminSkillName(e.target.value)}
+                    className="flex-1 rounded-xl border border-white/10 bg-slate-900 px-3.5 py-2 text-xs text-white outline-none focus:border-cyan-400"
+                  />
+                  <select
+                    value={newAdminSkillCategory}
+                    onChange={(e) => setNewAdminSkillCategory(e.target.value)}
+                    className="rounded-xl border border-white/10 bg-slate-900 px-3.5 py-2 text-xs text-white outline-none focus:border-cyan-400"
+                  >
+                    <option value="Technology">💻 Technology</option>
+                    <option value="Music">🎸 Music</option>
+                    <option value="Fitness">🧘 Fitness</option>
+                    <option value="Cooking">🍳 Cooking</option>
+                    <option value="Arts & Creativity">🎨 Arts & Creativity</option>
+                    <option value="Languages">🗣️ Languages</option>
+                    <option value="Academic">📚 Academic</option>
+                    <option value="General">🌟 General</option>
+                  </select>
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-teal-500/20 border border-teal-500/30 px-5 py-2 text-xs font-bold text-teal-300 hover:bg-teal-500/30 transition cursor-pointer"
+                  >
+                    + Add to Taxonomy
+                  </button>
+                </form>
+
+                {/* Skill List with Re-categorization */}
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {adminSkills.map((sk) => (
+                    <div
+                      key={sk.skill_id}
+                      className="rounded-2xl border border-white/10 bg-white/5 p-4 flex flex-col justify-between gap-3"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-white text-sm">{sk.skill_name}</span>
+                          <span className="text-[10px] text-slate-400 bg-white/5 px-2 py-0.5 rounded-full">
+                            #{sk.skill_id}
+                          </span>
+                        </div>
+                        <div className="text-xs text-cyan-300 mt-1">
+                          {sk.teachers_count || 0} resident mentors offering this
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-2 border-t border-white/5">
+                        <label className="text-[10px] uppercase font-bold text-slate-400">Category:</label>
+                        <select
+                          value={sk.category}
+                          onChange={async (e) => {
+                            const newCat = e.target.value;
+                            try {
+                              await apiClient.updateAdminSkillCategory(sk.skill_id, newCat);
+                              flash(`Reclassified "${sk.skill_name}" to ${newCat}!`, "success");
+                              setAdminSkills((prev) =>
+                                prev.map((item) =>
+                                  item.skill_id === sk.skill_id ? { ...item, category: newCat } : item
+                                )
+                              );
+                            } catch {
+                              flash("Failed to update category", "error");
+                            }
+                          }}
+                          className="flex-1 rounded-lg border border-white/10 bg-slate-900 px-2 py-1 text-xs text-slate-200 outline-none"
+                        >
+                          <option value="Technology">Technology</option>
+                          <option value="Music">Music</option>
+                          <option value="Fitness">Fitness</option>
+                          <option value="Cooking">Cooking</option>
+                          <option value="Arts & Creativity">Arts & Creativity</option>
+                          <option value="Languages">Languages</option>
+                          <option value="Academic">Academic</option>
+                          <option value="General">General</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

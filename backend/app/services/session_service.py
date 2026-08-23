@@ -1,5 +1,5 @@
 from datetime import datetime
-
+from sqlalchemy import or_, func
 from flask_jwt_extended import get_jwt_identity
 
 from app.extensions import db
@@ -18,7 +18,7 @@ class ValidationError(Exception):
         super().__init__(message)
 
 
-ALLOWED_SESSION_MODES = ["online", "in-person"]
+ALLOWED_SESSION_MODES = ["online", "in-person", "in_person"]
 
 ACTIVE_STATUSES = ("Pending", "Accepted")
 
@@ -70,7 +70,6 @@ def book_session_service(data):
     for field_name, value in (
         ("mentor_id", mentor_id),
         ("skill_id", skill_id),
-        ("availability_id", availability_id),
         ("session_date", session_date_raw),
         ("session_mode", session_mode),
     ):
@@ -92,7 +91,8 @@ def book_session_service(data):
     try:
         mentor_id = int(mentor_id)
         skill_id = int(skill_id)
-        availability_id = int(availability_id)
+        if availability_id is not None:
+            availability_id = int(availability_id)
     except (ValueError, TypeError):
         raise ValidationError(
             "mentor_id, skill_id and availability_id must be valid integers."
@@ -128,10 +128,45 @@ def book_session_service(data):
     if skill is None:
         raise ValidationError("Skill not found.")
 
-    availability = db.session.get(Availability, availability_id)
+    # Auto-resolve availability if not explicitly provided
+    if availability_id is not None:
+        availability = db.session.get(Availability, availability_id)
+        if availability is None or availability.user_id != mentor_id:
+            raise ValidationError("Availability slot not found for this mentor.")
+    else:
+        day_name = session_date.strftime("%A")
+        # Find mentor availability matching the day of the week, or any existing slot
+        availability = (
+            db.session.query(Availability)
+            .filter(
+                Availability.user_id == mentor_id,
+                or_(
+                    func.lower(Availability.day_of_week) == day_name.lower(),
+                    Availability.day_of_week == "Flexible",
+                ),
+            )
+            .first()
+        )
+        if not availability:
+            # Fallback to mentor's first available slot
+            availability = (
+                db.session.query(Availability)
+                .filter(Availability.user_id == mentor_id)
+                .first()
+            )
+        if not availability:
+            # Auto-create a standard daytime availability slot for the mentor
+            from datetime import time
+            availability = Availability(
+                user_id=mentor_id,
+                day_of_week=day_name,
+                start_time=time(10, 0),
+                end_time=time(18, 0),
+            )
+            db.session.add(availability)
+            db.session.flush()
 
-    if availability is None or availability.user_id != mentor_id:
-        raise ValidationError("Availability slot not found for this mentor.")
+        availability_id = availability.availability_id
 
     clashing_session = Session.query.filter(
         Session.availability_id == availability_id,

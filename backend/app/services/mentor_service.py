@@ -123,8 +123,10 @@ class MentorSearchService:
                 availability_list.append(str(a.day_of_week))
 
         location = (
-            mentor.society.city
-            if mentor.society and mentor.society.city
+            f"{mentor.society.society_name}, {mentor.society.city}"
+            if mentor.society and mentor.society.society_name and mentor.society.city
+            else mentor.society.society_name if mentor.society and mentor.society.society_name
+            else mentor.society.city if mentor.society and mentor.society.city
             else ""
         )
 
@@ -339,6 +341,7 @@ class MentorSearchService:
                 joinedload(User.society),
                 selectinload(User.user_skills).joinedload(UserSkill.skill),
                 selectinload(User.reviews_received),
+                selectinload(User.availabilities),
             )
             .filter(
                 or_(
@@ -353,7 +356,12 @@ class MentorSearchService:
             query = (
                 query.join(UserSkill, User.user_id == UserSkill.user_id)
                 .join(Skill, UserSkill.skill_id == Skill.skill_id)
-                .filter(Skill.skill_name.ilike(f"%{cleaned_skill}%"))
+                .filter(
+                    or_(
+                        Skill.skill_name.ilike(f"%{cleaned_skill}%"),
+                        Skill.category.ilike(f"%{cleaned_skill}%"),
+                    )
+                )
             )
 
         if location is not None and str(location).strip() != "":
@@ -373,8 +381,10 @@ class MentorSearchService:
         for mentor in mentors:
             skills_list = [
                 {
+                    "skill_id": us.skill.skill_id,
                     "name": us.skill.skill_name,
                     "skill_name": us.skill.skill_name,
+                    "category": us.skill.category,
                     "level": us.experience_level,
                     "years": us.years_of_experience or 0,
                     "years_of_experience": us.years_of_experience or 0,
@@ -393,26 +403,44 @@ class MentorSearchService:
                 avg_rating = (
                     round(sum(ratings) / len(ratings), 1) if ratings else 0.0
                 )
+                review_cnt = len(ratings)
             else:
                 avg_rating = 0.0
+                review_cnt = 0
 
             if min_rating is not None and avg_rating < min_rating:
                 continue
 
+            availability_list = []
+            for a in mentor.availabilities:
+                if a.start_time and a.end_time:
+                    s_str = a.start_time.strftime("%I:%M %p").lstrip("0")
+                    e_str = a.end_time.strftime("%I:%M %p").lstrip("0")
+                    availability_list.append(f"{a.day_of_week} ({s_str} - {e_str})")
+                else:
+                    availability_list.append(str(a.day_of_week))
+
             loc = (
-                mentor.society.city
-                if mentor.society and mentor.society.city
+                f"{mentor.society.society_name}, {mentor.society.city}"
+                if mentor.society and mentor.society.society_name and mentor.society.city
+                else mentor.society.society_name if mentor.society and mentor.society.society_name
+                else mentor.society.city if mentor.society and mentor.society.city
                 else ""
             )
 
             response_dto.append(
                 {
                     "id": mentor.user_id,
+                    "user_id": mentor.user_id,
                     "name": mentor.full_name,
+                    "full_name": mentor.full_name,
+                    "bio": mentor.bio or "",
                     "location": loc,
                     "skills": skills_list,
                     "years_of_experience": total_exp,
                     "rating": avg_rating,
+                    "review_count": review_cnt,
+                    "availability": availability_list,
                     "profile_picture": mentor.profile_image or "",
                 }
             )

@@ -64,8 +64,13 @@ export default function LoginPage() {
           apiClient.setAuthToken(token);
         }
         
-        // Redirect to home dashboard
-        router.replace("/dashboard");
+        // Redirect according to user role
+        const role = (response.data.role || "learner").toLowerCase();
+        if (role === "admin") {
+          router.replace("/admin");
+        } else {
+          router.replace("/dashboard");
+        }
       } else {
         setError(response.message || "Invalid credentials. Please try again.");
       }

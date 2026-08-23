@@ -255,21 +255,27 @@ def upload_profile_picture():
         )
         
         
-# Endpoint for adding a skill to the user's profile
-@profile_bp.route("/skills", methods=["POST"])
-@jwt_required()
-def add_skill():
+# Endpoint for listing all registered skills OR adding a skill to profile
+@profile_bp.route("/skills", methods=["GET", "POST"])
+def handle_skills():
     """
-    POST /api/profile/skills
-
-    Adds a skill to the logged-in user's profile.
+    GET /api/profile/skills -> Returns all registered skills
+    POST /api/profile/skills -> Adds a skill to the logged-in user's profile (requires JWT)
     """
+    if request.method == "GET":
+        from app.models.skill import Skill
+        skills = Skill.query.all()
+        return jsonify({
+            "status": "success",
+            "data": [{"skill_id": s.skill_id, "skill_name": s.skill_name, "category": s.category} for s in skills]
+        }), 200
 
+    # POST workflow
+    from flask_jwt_extended import verify_jwt_in_request
+    verify_jwt_in_request()
     data = request.get_json(silent=True)
-
     try:
         user_skill = add_skill_service(data)
-
         return (
             jsonify(
                 {
@@ -287,32 +293,11 @@ def add_skill():
             ),
             201,
         )
-
     except ValidationError as err:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": err.message,
-                }
-            ),
-            400,
-        )
-
+        return jsonify({"status": "error", "message": err.message}), 400
     except Exception as err:
-        current_app.logger.exception(
-            f"Unexpected error in add_skill: {str(err)}"
-        )
-
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "An unexpected error occurred.",
-                }
-            ),
-            500,
-        )
+        current_app.logger.exception(f"Unexpected error in add_skill: {str(err)}")
+        return jsonify({"status": "error", "message": "An unexpected error occurred."}), 500
 
 
 # Endpoint for removing a skill from user profile

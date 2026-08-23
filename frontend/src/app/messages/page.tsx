@@ -1,9 +1,10 @@
 "use client";
 
+import { Suspense, useEffect, useMemo, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { SiteShell } from "@/components/layout/site-shell";
 import { apiClient } from "@/lib/api-client";
-import { SendHorizonal, MessageSquareMore, Video } from "lucide-react";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { SendHorizonal, MessageSquareMore, Video, Loader2 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 
 interface ConversationSummary {
@@ -23,11 +24,16 @@ interface ChatMessage {
   sent_at: string | null;
 }
 
-export default function MessagesPage() {
+function MessagesContent() {
   const currentUser = useAppStore((state) => state.currentUser);
+  const searchParams = useSearchParams();
+  const targetUserId = searchParams.get("to");
+  const targetUserName = searchParams.get("name");
 
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(
+    targetUserId ? Number(targetUserId) : null
+  );
   const [threadMessages, setThreadMessages] = useState<ChatMessage[]>([]);
   const [allBookings, setAllBookings] = useState<any[]>([]);
   const [draft, setDraft] = useState("");
@@ -41,17 +47,36 @@ export default function MessagesPage() {
       try {
         const res = await apiClient.getConversationInbox();
         const rawData: any[] = res.data ?? [];
-        const normalized: ConversationSummary[] = rawData.map((item: any) => ({
+        let normalized: ConversationSummary[] = rawData.map((item: any) => ({
           other_user_id: item.other_user_id ?? item.user_id,
           other_user_name: item.other_user_name ?? item.user_name ?? "User",
           last_message: item.last_message ?? "",
           last_message_at: item.last_message_at ?? null,
           unread_count: item.unread_count ?? 0,
         }));
-        setConversations(normalized);
-        if (normalized.length > 0 && selectedUserId === null) {
+
+        // If a target user was passed via URL (e.g. Admin #1) and not in inbox, prepend it
+        if (targetUserId) {
+          const tId = Number(targetUserId);
+          const exists = normalized.some((c) => c.other_user_id === tId);
+          if (!exists) {
+            normalized = [
+              {
+                other_user_id: tId,
+                other_user_name: targetUserName || (tId === 1 ? "Society Admin" : `User #${tId}`),
+                last_message: "Start a conversation...",
+                last_message_at: null,
+                unread_count: 0,
+              },
+              ...normalized,
+            ];
+          }
+          setSelectedUserId(tId);
+        } else if (normalized.length > 0 && selectedUserId === null) {
           setSelectedUserId(normalized[0].other_user_id);
         }
+
+        setConversations(normalized);
         
         // Also fetch user bookings for context cards
         const bookingsRes = await apiClient.getBookingHistory();
@@ -64,7 +89,7 @@ export default function MessagesPage() {
     }
     fetchInbox();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [targetUserId, targetUserName]);
 
   const userSessions = useMemo(() => {
     if (!selectedUserId) return [];
@@ -342,3 +367,20 @@ export default function MessagesPage() {
     </SiteShell>
   );
 }
+
+export default function MessagesPage() {
+  return (
+    <Suspense
+      fallback={
+        <SiteShell>
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-cyan-400" />
+          </div>
+        </SiteShell>
+      }
+    >
+      <MessagesContent />
+    </Suspense>
+  );
+}
+

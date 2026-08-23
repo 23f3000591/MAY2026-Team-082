@@ -14,7 +14,10 @@ import {
   Sparkles, 
   UserCircle2, 
   CalendarDays,
-  LogOut
+  LogOut,
+  Users,
+  AlertTriangle,
+  Activity
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useAppStore } from "@/lib/store";
@@ -89,12 +92,15 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
 
   // Streamlined and consolidated navigation tabs
   const navLinks = [
-    { href: "/dashboard", label: "Home", icon: Home, show: true },
+    { href: "/dashboard", label: "Home", icon: Home, show: userRole !== "admin" },
     { href: "/search", label: "Discover", icon: Compass, show: userRole === "learner" },
     { href: "/bookings", label: "My Bookings", icon: BookOpenCheck, show: userRole === "learner" },
     { href: "/mentor", label: "Mentor Workspace", icon: CalendarDays, show: userRole === "mentor" },
     { href: "/admin", label: "Admin Center", icon: ShieldCheck, show: userRole === "admin" },
-    { href: "/profile", label: "Profile", icon: UserCircle2, show: true },
+    { href: "/admin/users", label: "User Management", icon: Users, show: userRole === "admin" },
+    { href: "/admin/reports", label: "Moderation", icon: AlertTriangle, show: userRole === "admin" },
+    { href: "/admin/activity", label: "Audit Telemetry", icon: Activity, show: userRole === "admin" },
+    { href: "/profile", label: "Profile", icon: UserCircle2, show: userRole !== "admin" },
   ].filter((item) => item.show);
 
   return (
@@ -103,7 +109,7 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
         <div className="flex items-center justify-between rounded-full border border-[var(--border)] bg-[var(--surface-elevated)] px-4 py-2.5 shadow-[0_16px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl">
           {/* Brand Logo */}
           <Link 
-            href={currentUser ? "/dashboard" : "/"} 
+            href={currentUser ? (userRole === "admin" ? "/admin" : "/dashboard") : "/"} 
             className="flex items-center gap-2 text-sm font-bold tracking-[0.25em] text-[var(--text-primary)] hover:opacity-80 transition"
           >
             <Sparkles className="h-4 w-4 text-[var(--accent)]" /> 
