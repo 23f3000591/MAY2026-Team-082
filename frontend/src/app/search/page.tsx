@@ -411,9 +411,12 @@ function DiscoverContent() {
                             <Clock className="h-3 w-3" /> Free Windows:
                           </div>
                           <div className="text-[11px] text-slate-400 flex flex-wrap gap-1">
-                            {availArr.slice(0, 3).map((av: string, i: number) => (
-                              <span key={i} className="bg-white/5 rounded-md px-1.5 py-0.5">{av}</span>
-                            ))}
+                            {availArr.slice(0, 3).map((av: any, i: number) => {
+                              const label = typeof av === "string" ? av : av.label || `${av.day_of_week || av.day || ""} ${av.time_range || ""}`.trim();
+                              return (
+                                <span key={i} className="bg-white/5 rounded-md px-1.5 py-0.5">{label}</span>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
