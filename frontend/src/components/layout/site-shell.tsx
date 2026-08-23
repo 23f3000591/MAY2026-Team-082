@@ -184,9 +184,6 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
 
             {currentUser ? (
               <div className="flex items-center gap-2 pl-1">
-                <span className="hidden text-xs font-semibold text-cyan-300 lg:inline-block max-w-[120px] truncate">
-                  {currentUser.name}
-                </span>
                 <button
                   onClick={handleLogout}
                   title="Logout"
