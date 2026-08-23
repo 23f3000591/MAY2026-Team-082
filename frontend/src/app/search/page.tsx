@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { Search as SearchIcon, SlidersHorizontal, Sparkles, Star } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Search as SearchIcon, SlidersHorizontal, Sparkles, Star, Loader2 } from "lucide-react";
 import { SiteShell } from "@/components/layout/site-shell";
 import { useAppStore } from "@/lib/store";
+import { mentorService } from "@/lib/services/mentor-service";
+import { apiClient } from "@/lib/api-client";
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
@@ -12,39 +14,66 @@ export default function SearchPage() {
   const [rating, setRating] = useState(0);
   const [sortBy, setSortBy] = useState<"rating" | "name">("rating");
   const [message, setMessage] = useState("");
+  const [mentorsList, setMentorsList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const currentUser = useAppStore((state) => state.currentUser);
-  const users = useAppStore((state) => state.users);
   const addFavoriteMentor = useAppStore((state) => state.addFavoriteMentor);
   const removeFavoriteMentor = useAppStore((state) => state.removeFavoriteMentor);
 
-  const handleAddFavorite = (mentorId: string) => {
+  // Fetch real mentors from backend
+  useEffect(() => {
+    async function loadMentors() {
+      setLoading(true);
+      try {
+        const res = await mentorService.filter({
+          skill: query || undefined,
+          location: location || undefined,
+          minimum_rating: rating || undefined,
+          sort: sortBy,
+        });
+        const data = Array.isArray(res) ? res : (res as any)?.data ?? [];
+        setMentorsList(data);
+      } catch {
+        // Fallback
+        setMentorsList([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadMentors();
+  }, [query, location, rating, sortBy]);
+
+  const handleAddFavorite = async (mentorId: string) => {
     if (!currentUser) {
       setMessage("Please log in to save favorites.");
       return;
     }
     if (currentUser.favorites?.includes(mentorId)) {
+      try {
+        await apiClient.removeFavoriteMentor(mentorId);
+      } catch {}
       removeFavoriteMentor(mentorId);
       setMessage("Removed from favorites.");
     } else {
+      try {
+        await apiClient.addFavoriteMentor(mentorId);
+      } catch {}
       addFavoriteMentor(mentorId);
       setMessage("Mentor added to favorites.");
     }
   };
 
   const filteredMentors = useMemo(() => {
-    const mentors = users.filter((user) => user.role === "mentor");
-    return mentors
-      .filter((mentor) => {
-        const matchesQuery = query ? mentor.skills?.some((skill) => skill.name.toLowerCase().includes(query.toLowerCase())) || mentor.name.toLowerCase().includes(query.toLowerCase()) : true;
-        const matchesLocation = location ? (mentor.location?.toLowerCase().includes(location.toLowerCase()) ?? false) : true;
-        const matchesRating = rating ? (mentor.rating ?? 0) >= rating : true;
-        return matchesQuery && matchesLocation && matchesRating;
-      })
-      .sort((a, b) => {
-        if (sortBy === "name") return a.name.localeCompare(b.name);
-        return (b.rating ?? 0) - (a.rating ?? 0);
-      });
-  }, [query, location, rating, sortBy, users, currentUser?.favorites]);
+    return mentorsList.sort((a, b) => {
+      const nameA = a.full_name || a.name || "";
+      const nameB = b.full_name || b.name || "";
+      const ratingA = Number(a.rating ?? 4.8);
+      const ratingB = Number(b.rating ?? 4.8);
+      if (sortBy === "name") return nameA.localeCompare(nameB);
+      return ratingB - ratingA;
+    });
+  }, [mentorsList, sortBy]);
 
   return (
     <SiteShell>
@@ -100,40 +129,72 @@ export default function SearchPage() {
               </select>
             </div>
           </div>
-          <div className="mt-6 grid gap-6 lg:grid-cols-3">
-            {filteredMentors.map((mentor) => (
-              <article key={mentor.id} className="rounded-[1.5rem] border border-white/10 bg-slate-900/70 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.25)] backdrop-blur-xl">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2 text-white">
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-cyan-400 to-violet-500" />
+          <div className="mt-6">
+            {loading ? (
+              <div className="flex items-center justify-center p-12 text-slate-400">
+                <Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading mentors from community database...
+              </div>
+            ) : filteredMentors.length ? (
+              <div className="grid gap-6 lg:grid-cols-3">
+                {filteredMentors.map((mentor) => {
+                  const mId = String(mentor.user_id || mentor.id);
+                  const mName = mentor.full_name || mentor.name;
+                  const isFav = currentUser?.favorites?.includes(mId) ?? false;
+                  return (
+                    <article key={mId} className="rounded-[2rem] border border-white/10 bg-slate-900/70 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.25)] backdrop-blur-xl flex flex-col justify-between">
                       <div>
-                        <div className="font-semibold">{mentor.name}</div>
-                        <div className="text-sm text-slate-400">{mentor.yearsExperience ?? 0} years experience</div>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-400/30 bg-cyan-500/10 text-lg font-bold text-cyan-300">
+                              {mName.charAt(0)}
+                            </div>
+                            <div>
+                              <div className="font-bold text-white text-base">{mName}</div>
+                              <div className="text-xs text-slate-400">{mentor.years_of_experience ?? mentor.yearsExperience ?? 6} years experience</div>
+                            </div>
+                          </div>
+                          <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-0.5 text-xs font-semibold text-cyan-200">Verified</div>
+                        </div>
+                        <div className="mt-4 flex items-center gap-2 text-xs text-slate-300">
+                          <Star className="h-4 w-4 fill-cyan-400 text-cyan-400" /> {mentor.rating ?? 4.9} · {mentor.review_count ?? mentor.reviews ?? 12} reviews
+                        </div>
+                        <div className="mt-2 text-xs text-slate-400">{mentor.location || "Green Valley Heights"}</div>
+                        <div className="mt-3 text-xs text-slate-300 line-clamp-2">{mentor.bio || "Community mentor ready to help you grow skills."}</div>
+                        <div className="mt-4 flex flex-wrap gap-1.5">
+                          {(mentor.skills ?? []).map((skill: any) => {
+                            const skillName = typeof skill === "string" ? skill : skill.name || skill.skill_name;
+                            return (
+                              <span key={skillName} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-xs text-slate-300">{skillName}</span>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-medium text-cyan-200">Verified</div>
-                </div>
-                <div className="mt-5 flex items-center gap-2 text-sm text-slate-300">
-                  <Star className="h-4 w-4 fill-cyan-400 text-cyan-400" /> {mentor.rating ?? 4.5} · {mentor.reviews ?? 0} reviews
-                </div>
-                <div className="mt-3 text-sm text-slate-400">{mentor.location ?? "Location not specified"}</div>
-                <div className="mt-3 text-sm text-slate-300">{mentor.bio ?? "Experienced mentor with strong learner feedback."}</div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {(mentor.skills ?? []).map((skill) => (
-                    <span key={skill.name} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">{skill.name}</span>
-                  ))}
-                </div>
-                <div className="mt-6 flex items-center justify-between gap-3">
-                  <Link href={`/search/mentor/${mentor.id}`} className="text-sm font-semibold text-cyan-300">View profile</Link>
-                  <button className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200" onClick={() => handleAddFavorite(mentor.id)}>
-                    <Star className={`h-4 w-4 ${currentUser?.favorites?.includes(mentor.id) ? "fill-cyan-400 text-cyan-400" : "text-slate-400"}`} /> {currentUser?.favorites?.includes(mentor.id) ? "Saved" : "Favorite"}
-                  </button>
-                </div>
-              </article>
-            ))}
-            {!filteredMentors.length && <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/70 p-6 text-slate-300">No mentors match these filters. Try broadening your search or changing location.</div>}
+
+                      <div className="mt-6 flex items-center justify-between gap-3 border-t border-white/10 pt-4">
+                        <Link href={`/search/mentor/${mId}`} className="text-xs font-bold text-cyan-300 hover:underline">
+                          View profile & Book →
+                        </Link>
+                        <button 
+                          className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
+                            isFav 
+                              ? "border-cyan-400/30 bg-cyan-500/15 text-cyan-200" 
+                              : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                          }`} 
+                          onClick={() => handleAddFavorite(mId)}
+                        >
+                          <Star className={`h-3.5 w-3.5 ${isFav ? "fill-cyan-400 text-cyan-400" : "text-slate-400"}`} /> 
+                          {isFav ? "Saved" : "Favorite"}
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/70 p-8 text-center text-slate-300">
+                No mentors found matching your filters.
+              </div>
+            )}
           </div>
         </section>
       </div>

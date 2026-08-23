@@ -96,17 +96,23 @@ def edit_profile_service(data):
     if user is None:
         raise ValidationError("User not found.")
 
+    # Update full_name if provided
+    if "full_name" in data and str(data.get("full_name", "")).strip():
+        user.full_name = str(data.get("full_name")).strip()
+
     # Update bio if provided
     if "bio" in data:
         bio = str(data.get("bio", "")).strip()
-
-        if not bio:
-            raise ValidationError("Bio cannot be empty.")
-
         if len(bio) > 1000:
             raise ValidationError("Bio cannot exceed 1000 characters.")
-
         user.bio = bio
+
+    # Update location / society if provided
+    if "location" in data and str(data.get("location", "")).strip():
+        loc_str = str(data.get("location")).strip()
+        if user.society:
+            user.society.society_name = loc_str
+            user.society.city = loc_str
 
     db.session.commit()
 
@@ -168,10 +174,21 @@ def add_skill_service(data):
             f"Missing or invalid required fields: {', '.join(missing_fields)}"
         )
 
+    skill = None
     try:
-        skill_id = int(skill_id)
+        skill_int_id = int(skill_id)
+        skill = db.session.get(Skill, skill_int_id)
     except (ValueError, TypeError):
-        raise ValidationError("skill_id must be a valid integer.")
+        pass
+
+    if not skill:
+        skill_name_str = str(skill_id).strip()
+        skill = Skill.query.filter(Skill.skill_name.ilike(skill_name_str)).first()
+        if not skill:
+            # Dynamically create skill if it doesn't exist
+            skill = Skill(skill_name=skill_name_str, category="General")
+            db.session.add(skill)
+            db.session.flush()
 
     user_id = int(get_jwt_identity())
 
@@ -180,22 +197,21 @@ def add_skill_service(data):
     if not user:
         raise ValidationError("User not found.")
 
-    skill = db.session.get(Skill, skill_id)
-
-    if not skill:
-        raise ValidationError("Skill not found.")
-
     existing_skill = UserSkill.query.filter_by(
         user_id=user_id,
-        skill_id=skill_id,
+        skill_id=skill.skill_id,
     ).first()
 
     if existing_skill:
-        raise ValidationError("Skill already added to profile.")
+        existing_skill.experience_level = str(experience_level).strip()
+        existing_skill.years_of_experience = years_of_experience
+        existing_skill.description = description
+        db.session.commit()
+        return existing_skill
 
     user_skill = UserSkill(
         user_id=user_id,
-        skill_id=skill_id,
+        skill_id=skill.skill_id,
         experience_level=str(experience_level).strip(),
         years_of_experience=years_of_experience,
         description=description,

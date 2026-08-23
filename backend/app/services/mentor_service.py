@@ -87,14 +87,22 @@ class MentorSearchService:
                 .first()
             )
 
-        if not mentor:
-            raise NotFoundError("Mentor not found", status_code=404)
-
         skills_list = [
-            us.skill.skill_name
+            {
+                "name": us.skill.skill_name,
+                "skill_name": us.skill.skill_name,
+                "level": us.experience_level,
+                "years": us.years_of_experience or 0,
+                "years_of_experience": us.years_of_experience or 0,
+                "description": us.description or "",
+            }
             for us in mentor.user_skills
             if us.skill and us.skill.skill_name
         ]
+
+        # Calculate total/max years of experience from registered skills
+        skill_years = [s["years"] for s in skills_list if s["years"]]
+        total_exp = max(skill_years) if skill_years else 0
 
         if mentor.reviews_received:
             ratings = [
@@ -126,6 +134,7 @@ class MentorSearchService:
             "bio": mentor.bio or "",
             "location": location,
             "skills": skills_list,
+            "years_of_experience": total_exp,
             "rating": avg_rating,
             "review_count": review_count,
             "availability": availability_list,
@@ -363,10 +372,19 @@ class MentorSearchService:
         response_dto = []
         for mentor in mentors:
             skills_list = [
-                us.skill.skill_name
+                {
+                    "name": us.skill.skill_name,
+                    "skill_name": us.skill.skill_name,
+                    "level": us.experience_level,
+                    "years": us.years_of_experience or 0,
+                    "years_of_experience": us.years_of_experience or 0,
+                }
                 for us in mentor.user_skills
                 if us.skill and us.skill.skill_name
             ]
+
+            skill_years = [s["years"] for s in skills_list if s["years"]]
+            total_exp = max(skill_years) if skill_years else 0
 
             if mentor.reviews_received:
                 ratings = [
@@ -393,6 +411,7 @@ class MentorSearchService:
                     "name": mentor.full_name,
                     "location": loc,
                     "skills": skills_list,
+                    "years_of_experience": total_exp,
                     "rating": avg_rating,
                     "profile_picture": mentor.profile_image or "",
                 }

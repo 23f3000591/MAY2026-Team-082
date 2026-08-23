@@ -64,14 +64,8 @@ export default function LoginPage() {
           apiClient.setAuthToken(token);
         }
         
-        // Redirect based on role
-        const redirectPath = 
-          response.data.role === "admin" ? "/admin" :
-          response.data.role === "manager" ? "/manager" :
-          response.data.role === "mentor" ? "/mentor" :
-          response.data.role === "moderator" ? "/moderator" :
-          "/dashboard";
-        router.replace(redirectPath);
+        // Redirect to home dashboard
+        router.replace("/dashboard");
       } else {
         setError(response.message || "Invalid credentials. Please try again.");
       }
@@ -87,12 +81,16 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[var(--page-bg)] p-4 text-[var(--text-primary)] transition-colors duration-200">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-[var(--page-bg)] p-4 text-[var(--text-primary)] transition-colors duration-200">
+      <Link href="/" className="mb-6 flex items-center gap-2 text-base font-bold tracking-[0.25em] text-[var(--text-primary)] hover:opacity-80 transition">
+        <Sparkles className="h-5 w-5 text-cyan-400" />
+        <span>NEXCHANGE</span>
+      </Link>
+
       <div className="w-full max-w-lg rounded-[2.5rem] border border-white/15 bg-slate-900/80 p-8 sm:p-10 shadow-[0_24px_90px_rgba(15,23,42,0.45)] backdrop-blur-2xl">
         <div className="mb-6 flex items-center justify-between gap-2 text-cyan-200">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-cyan-400" />
-            <span className="text-xs font-bold uppercase tracking-[0.28em] text-cyan-300">Welcome back</span>
+            <span className="text-xs font-bold uppercase tracking-[0.28em] text-cyan-300">Neighborhood Skill Exchange</span>
           </div>
           <ThemeToggle />
         </div>
@@ -107,21 +105,35 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => handleQuickFill("akhil@gmail.com", "Password123!")}
-              className="flex items-center gap-1.5 rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-medium text-purple-200 hover:bg-purple-500/20 transition"
+              className="flex items-center gap-1.5 rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-medium text-purple-200 hover:bg-purple-500/20 transition cursor-pointer"
             >
               <ShieldCheck className="h-3.5 w-3.5 text-purple-300" /> Akhil (Admin)
             </button>
             <button
               type="button"
               onClick={() => handleQuickFill("saanvi@gmail.com", "Password123!")}
-              className="flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-200 hover:bg-cyan-500/20 transition"
+              className="flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-200 hover:bg-cyan-500/20 transition cursor-pointer"
             >
-              <UserCheck className="h-3.5 w-3.5 text-cyan-300" /> Saanvi (Mentor)
+              <UserCheck className="h-3.5 w-3.5 text-cyan-300" /> Saanvi (Python Mentor)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickFill("karthick@gmail.com", "Password123!")}
+              className="flex items-center gap-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-200 hover:bg-blue-500/20 transition cursor-pointer"
+            >
+              <UserCheck className="h-3.5 w-3.5 text-blue-300" /> Karthick (Data Science)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickFill("harshkumar@gmail.com", "Password123!")}
+              className="flex items-center gap-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-xs font-medium text-teal-200 hover:bg-teal-500/20 transition cursor-pointer"
+            >
+              <UserCheck className="h-3.5 w-3.5 text-teal-300" /> Harsh (Guitar & Yoga)
             </button>
             <button
               type="button"
               onClick={() => handleQuickFill("harshad@gmail.com", "Password123!")}
-              className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-200 hover:bg-emerald-500/20 transition"
+              className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-200 hover:bg-emerald-500/20 transition cursor-pointer"
             >
               <GraduationCap className="h-3.5 w-3.5 text-emerald-300" /> Harshad (Learner)
             </button>

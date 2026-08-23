@@ -18,7 +18,7 @@ class Society(db.Model):
 
     pincode = db.Column(db.String(10), nullable=False)
 
-    admin_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False)
+    admin_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=True)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 

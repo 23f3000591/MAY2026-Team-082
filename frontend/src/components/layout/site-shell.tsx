@@ -1,44 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Activity, BellRing, BookOpenCheck, FileText, Heart, Home, MessageCircle, MessagesSquare, Search, ShieldCheck, Sparkles, UserCircle2, Users } from "lucide-react";
+import { 
+  BellRing, 
+  BookOpenCheck, 
+  Compass, 
+  Home, 
+  MessagesSquare, 
+  ShieldCheck, 
+  Sparkles, 
+  UserCircle2, 
+  CalendarDays,
+  LogOut
+} from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useAppStore } from "@/lib/store";
-
-const navItems = [
-  { href: "/dashboard", label: "Home", icon: Home },
-  { href: "/search", label: "Discover", icon: Search },
-  { href: "/favorites", label: "Favorites", icon: Heart },
-  { href: "/bookings", label: "My Sessions", icon: BookOpenCheck },
-  { href: "/mentor", label: "Session Requests", icon: MessageCircle },
-  { href: "/availability", label: "Availability", icon: Activity },
-  { href: "/messages", label: "Messages", icon: MessagesSquare },
-  { href: "/notifications", label: "Notifications", icon: BellRing },
-  { href: "/profile", label: "Profile", icon: UserCircle2 },
-  { href: "/admin", label: "Admin Dashboard", icon: ShieldCheck },
-  { href: "/admin/users", label: "Users", icon: Users },
-  { href: "/admin/reports", label: "Reports", icon: FileText },
-  { href: "/admin/activity", label: "Activity", icon: Activity },
-];
-
-const roleRoutes = {
-  learner: ["/dashboard", "/search", "/favorites", "/bookings", "/notifications", "/messages", "/profile"],
-  mentor: ["/dashboard", "/search", "/bookings", "/mentor", "/availability", "/messages", "/notifications", "/profile"],
-  admin: ["/admin", "/admin/users", "/admin/reports", "/admin/activity"],
-  manager: ["/dashboard", "/manager", "/search", "/bookings", "/messages", "/notifications", "/profile"],
-  moderator: ["/dashboard", "/moderator", "/search", "/bookings", "/messages", "/notifications", "/profile"],
-};
+import { apiClient } from "@/lib/api-client";
 
 export function SiteShell({ children }: { children: React.ReactNode }) {
   const currentUser = useAppStore((state) => state.currentUser);
   const logout = useAppStore((state) => state.logout);
   const setCurrentUser = useAppStore((state) => state.setCurrentUser);
-  const normalizedRole = (currentUser?.role?.toLowerCase() ?? "learner") as keyof typeof roleRoutes;
-  const allowedRoutes = roleRoutes[normalizedRole] ?? roleRoutes.learner;
+  const pathname = usePathname();
   const router = useRouter();
+
+  const [unreadMsgCount, setUnreadMsgCount] = useState(0);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
   // Load current user from localStorage on mount
   useEffect(() => {
@@ -66,39 +56,147 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Fetch unread counters for icon badges
+  useEffect(() => {
+    if (!currentUser) return;
+    async function fetchBadges() {
+      try {
+        const [notifRes, msgRes] = await Promise.allSettled([
+          apiClient.getNotifications(),
+          apiClient.getConversationInbox(),
+        ]);
+        if (notifRes.status === "fulfilled") {
+          const unreadNotifs = (notifRes.value.data ?? []).filter((n: any) => !n.is_read).length;
+          setUnreadNotifCount(unreadNotifs);
+        }
+        if (msgRes.status === "fulfilled") {
+          const totalUnreadMsgs = (msgRes.value.data ?? []).reduce((acc: number, c: any) => acc + (c.unread_count || 0), 0);
+          setUnreadMsgCount(totalUnreadMsgs);
+        }
+      } catch {
+        // silent
+      }
+    }
+    fetchBadges();
+  }, [currentUser, pathname]);
+
   const handleLogout = () => {
     logout();
     router.push("/auth/login");
   };
 
-  const visibleNav = navItems.filter((item) => allowedRoutes.includes(item.href));
+  const userRole = (currentUser?.role?.toLowerCase() ?? "learner");
+
+  // Streamlined and consolidated navigation tabs
+  const navLinks = [
+    { href: "/dashboard", label: "Home", icon: Home, show: true },
+    { href: "/search", label: "Discover", icon: Compass, show: userRole === "learner" },
+    { href: "/bookings", label: "My Bookings", icon: BookOpenCheck, show: userRole === "learner" },
+    { href: "/mentor", label: "Mentor Workspace", icon: CalendarDays, show: userRole === "mentor" },
+    { href: "/admin", label: "Admin Center", icon: ShieldCheck, show: userRole === "admin" },
+    { href: "/profile", label: "Profile", icon: UserCircle2, show: true },
+  ].filter((item) => item.show);
 
   return (
     <div className="min-h-screen bg-[var(--page-bg)] text-[var(--text-primary)] transition-colors duration-200">
-      <header className="sticky top-4 z-50 mx-auto mb-8 max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between rounded-full border border-[var(--border)] bg-[var(--surface-elevated)] px-4 py-3 shadow-[0_20px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl">
-          <Link href="/" className="flex items-center gap-2 text-sm font-semibold tracking-[0.28em] text-[var(--text-primary)]">
-            <Sparkles className="h-4 w-4 text-[var(--accent)]" /> NEXCHANGE
+      <header className="sticky top-3 z-50 mx-auto mb-6 max-w-7xl px-4 pt-2 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between rounded-full border border-[var(--border)] bg-[var(--surface-elevated)] px-4 py-2.5 shadow-[0_16px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+          {/* Brand Logo */}
+          <Link 
+            href={currentUser ? "/dashboard" : "/"} 
+            className="flex items-center gap-2 text-sm font-bold tracking-[0.25em] text-[var(--text-primary)] hover:opacity-80 transition"
+          >
+            <Sparkles className="h-4 w-4 text-[var(--accent)]" /> 
+            <span className="hidden sm:inline">NEXCHANGE</span>
           </Link>
-          <nav className="hidden items-center gap-5 text-sm text-[var(--text-secondary)] md:flex">
-            {visibleNav.map((item) => {
+
+          {/* Primary Nav Links */}
+          <nav className="hidden items-center gap-1 sm:flex md:gap-2">
+            {navLinks.map((item) => {
               const Icon = item.icon;
+              const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
               return (
-                <Link key={item.href} href={item.href} className="flex items-center gap-2 transition hover:text-white">
-                  <Icon className="h-4 w-4" /> {item.label}
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+                    isActive
+                      ? "bg-cyan-500/15 text-cyan-400 border border-cyan-400/30"
+                      : "text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span>{item.label}</span>
                 </Link>
               );
             })}
           </nav>
+
+          {/* Right Action Icons & User Menu */}
           <div className="flex items-center gap-2">
+            {currentUser && (
+              <>
+                {/* Messages Icon Button */}
+                <Link
+                  href="/messages"
+                  title="Messages"
+                  className={`relative rounded-full border p-2 transition ${
+                    pathname === "/messages"
+                      ? "border-cyan-400/30 bg-cyan-500/15 text-cyan-300"
+                      : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
+                  }`}
+                >
+                  <MessagesSquare className="h-4 w-4" />
+                  {unreadMsgCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-cyan-400 px-1 text-[9px] font-bold text-slate-950">
+                      {unreadMsgCount}
+                    </span>
+                  )}
+                </Link>
+
+                {/* Notifications Icon Button */}
+                <Link
+                  href="/notifications"
+                  title="Notifications"
+                  className={`relative rounded-full border p-2 transition ${
+                    pathname === "/notifications"
+                      ? "border-cyan-400/30 bg-cyan-500/15 text-cyan-300"
+                      : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
+                  }`}
+                >
+                  <BellRing className="h-4 w-4" />
+                  {unreadNotifCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
+                      {unreadNotifCount}
+                    </span>
+                  )}
+                </Link>
+              </>
+            )}
+
             <ThemeToggle />
+
             {currentUser ? (
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-cyan-300">{currentUser.name}</span>
-                <button onClick={handleLogout} className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--surface-hover)]">Logout</button>
+              <div className="flex items-center gap-2 pl-1">
+                <span className="hidden text-xs font-semibold text-cyan-300 lg:inline-block max-w-[120px] truncate">
+                  {currentUser.name}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  title="Logout"
+                  className="flex items-center gap-1 rounded-full border border-rose-400/20 bg-rose-400/10 px-3 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-400/20 cursor-pointer"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Logout</span>
+                </button>
               </div>
             ) : (
-              <Link href="/auth/login" className="rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 px-4 py-2 text-sm font-semibold text-white transition hover:scale-[1.02]">Sign in</Link>
+              <Link
+                href="/auth/login"
+                className="rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-indigo-500 px-4 py-1.5 text-xs font-semibold text-white transition hover:scale-[1.02] cursor-pointer"
+              >
+                Sign in
+              </Link>
             )}
           </div>
         </div>

@@ -313,8 +313,27 @@ def add_skill():
             ),
             500,
         )
-        
-        
+
+
+# Endpoint for removing a skill from user profile
+@profile_bp.route("/skills/<int:skill_id>", methods=["DELETE"])
+@jwt_required()
+def delete_skill(skill_id):
+    """
+    DELETE /api/profile/skills/<skill_id>
+    """
+    from flask_jwt_extended import get_jwt_identity
+    from app.models.user_skill import UserSkill
+    from app.extensions import db
+
+    user_id = int(get_jwt_identity())
+    user_skill = UserSkill.query.filter_by(user_id=user_id, skill_id=skill_id).first()
+    if user_skill:
+        db.session.delete(user_skill)
+        db.session.commit()
+    return jsonify({"status": "success", "message": "Skill removed"}), 200
+
+
 # Endpoint for viewing a mentor's profile
 @profile_bp.route("/mentor/<int:user_id>", methods=["GET"])
 @jwt_required()

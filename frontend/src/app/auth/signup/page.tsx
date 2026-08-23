@@ -55,17 +55,21 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[var(--page-bg)] p-4 text-[var(--text-primary)] transition-colors duration-200">
-      <div className="w-full max-w-md rounded-[2rem] border border-white/10 bg-slate-900/70 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.35)] backdrop-blur-xl">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-[var(--page-bg)] p-4 text-[var(--text-primary)] transition-colors duration-200">
+      <Link href="/" className="mb-6 flex items-center gap-2 text-base font-bold tracking-[0.25em] text-[var(--text-primary)] hover:opacity-80 transition">
+        <Sparkles className="h-5 w-5 text-cyan-400" />
+        <span>NEXCHANGE</span>
+      </Link>
+
+      <div className="w-full max-w-md rounded-[2.5rem] border border-white/10 bg-slate-900/70 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.35)] backdrop-blur-xl">
         <div className="mb-6 flex items-center justify-between gap-2 text-cyan-200">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5" />
-            <span className="text-sm font-semibold uppercase tracking-[0.3em]">Join the movement</span>
+            <span className="text-xs font-bold uppercase tracking-[0.28em] text-cyan-300">Neighborhood Skill Exchange</span>
           </div>
           <ThemeToggle />
         </div>
-        <h1 className="text-3xl font-semibold text-white">Create your account.</h1>
-        <p className="mt-3 text-sm text-slate-400">Start teaching, learning, and building local expertise with confidence.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-white">Create your account</h1>
+        <p className="mt-2.5 text-sm text-slate-300">Start teaching, learning, and building local expertise with confidence.</p>
         <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
           <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/70 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
             <label className="mb-2 block text-sm uppercase tracking-[0.2em] text-slate-500">Full Name</label>

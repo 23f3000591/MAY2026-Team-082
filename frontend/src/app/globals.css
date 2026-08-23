@@ -113,9 +113,17 @@ textarea::placeholder {
   color: var(--text-muted) !important;
 }
 
-/* Light Theme Color Consistency */
+/* Light Theme Color Consistency & High Contrast */
 html[data-theme="light"] {
-  --page-bg: radial-gradient(circle at 50% 0%, #eef5fc 0%, transparent 60%), linear-gradient(180deg, #edf2f9 0%, #e2e8f0 100%);
+  --page-bg: radial-gradient(circle at 50% 0%, #eef4fc 0%, transparent 60%), linear-gradient(180deg, #f0f4f9 0%, #e2e8f0 100%);
+  --surface: #ffffff;
+  --surface-strong: #f8fafc;
+  --surface-elevated: #ffffff;
+  --surface-hover: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
 }
 
 html[data-theme="light"] .text-white,
@@ -134,6 +142,7 @@ html[data-theme="light"] .text-slate-500 {
   color: #64748b !important;
 }
 
+/* Cyan Accents in Light Mode */
 html[data-theme="light"] .text-cyan-200,
 html[data-theme="light"] .text-cyan-300,
 html[data-theme="light"] .text-cyan-400 {
@@ -142,13 +151,89 @@ html[data-theme="light"] .text-cyan-400 {
 
 html[data-theme="light"] .bg-cyan-400\/10,
 html[data-theme="light"] .bg-cyan-500\/10,
-html[data-theme="light"] .bg-cyan-500\/15 {
-  background-color: rgba(14, 116, 144, 0.1) !important;
+html[data-theme="light"] .bg-cyan-500\/15,
+html[data-theme="light"] .bg-cyan-500\/20 {
+  background-color: #ecfeff !important;
 }
 
 html[data-theme="light"] .border-cyan-400\/20,
-html[data-theme="light"] .border-cyan-400\/30 {
-  border-color: rgba(14, 116, 144, 0.25) !important;
+html[data-theme="light"] .border-cyan-400\/30,
+html[data-theme="light"] .border-cyan-500\/30 {
+  border-color: #a5f3fc !important;
+}
+
+/* Emerald Accents in Light Mode */
+html[data-theme="light"] .text-emerald-200,
+html[data-theme="light"] .text-emerald-300,
+html[data-theme="light"] .text-emerald-400 {
+  color: #047857 !important;
+}
+
+html[data-theme="light"] .bg-emerald-400\/10,
+html[data-theme="light"] .bg-emerald-500\/10,
+html[data-theme="light"] .bg-emerald-500\/20 {
+  background-color: #ecfdf5 !important;
+}
+
+html[data-theme="light"] .border-emerald-400\/20,
+html[data-theme="light"] .border-emerald-500\/30 {
+  border-color: #a7f3d0 !important;
+}
+
+/* Purple Accents in Light Mode */
+html[data-theme="light"] .text-purple-200,
+html[data-theme="light"] .text-purple-300,
+html[data-theme="light"] .text-purple-400 {
+  color: #6d28d9 !important;
+}
+
+html[data-theme="light"] .bg-purple-400\/10,
+html[data-theme="light"] .bg-purple-500\/10,
+html[data-theme="light"] .bg-purple-500\/20 {
+  background-color: #f5f3ff !important;
+}
+
+html[data-theme="light"] .border-purple-400\/20,
+html[data-theme="light"] .border-purple-500\/30 {
+  border-color: #ddd6fe !important;
+}
+
+/* Rose / Amber Badges in Light Mode */
+html[data-theme="light"] .text-rose-200,
+html[data-theme="light"] .text-rose-300,
+html[data-theme="light"] .text-rose-400 {
+  color: #be123c !important;
+}
+
+html[data-theme="light"] .bg-rose-400\/10,
+html[data-theme="light"] .bg-rose-500\/10 {
+  background-color: #fff1f2 !important;
+}
+
+html[data-theme="light"] .border-rose-400\/20 {
+  border-color: #fecdd3 !important;
+}
+
+html[data-theme="light"] .text-amber-300,
+html[data-theme="light"] .text-amber-400 {
+  color: #b45309 !important;
+}
+
+/* Contrast boost for card wells in light mode */
+html[data-theme="light"] .bg-slate-950\/70,
+html[data-theme="light"] .bg-slate-950\/60,
+html[data-theme="light"] .bg-slate-950\/40,
+html[data-theme="light"] .bg-slate-950\/30,
+html[data-theme="light"] .bg-slate-950 {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+html[data-theme="light"] .bg-slate-800,
+html[data-theme="light"] .bg-slate-800\/90,
+html[data-theme="light"] .bg-slate-800\/70 {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
 }
 
 /* Gradient Action Buttons (Cyan to Purple pill from screenshots) */
@@ -161,4 +246,15 @@ html[data-theme="light"] .border-cyan-400\/30 {
 .btn-primary-gradient:hover,
 .bg-gradient-to-r.from-cyan-500:hover {
   filter: brightness(1.08);
+}
+
+/* Hide Next.js development indicator icon */
+nextjs-portal,
+#nextjs-dev-indicator,
+[data-nextjs-dev-indicator],
+[data-nextjs-toast] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }

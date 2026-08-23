@@ -2,7 +2,7 @@
 
 import { SiteShell } from "@/components/layout/site-shell";
 import { apiClient } from "@/lib/api-client";
-import { SendHorizonal, MessageSquareMore } from "lucide-react";
+import { SendHorizonal, MessageSquareMore, Video } from "lucide-react";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useAppStore } from "@/lib/store";
 
@@ -29,6 +29,7 @@ export default function MessagesPage() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [threadMessages, setThreadMessages] = useState<ChatMessage[]>([]);
+  const [allBookings, setAllBookings] = useState<any[]>([]);
   const [draft, setDraft] = useState("");
   const [loadingInbox, setLoadingInbox] = useState(true);
   const [loadingThread, setLoadingThread] = useState(false);
@@ -39,11 +40,22 @@ export default function MessagesPage() {
       setLoadingInbox(true);
       try {
         const res = await apiClient.getConversationInbox();
-        const data: ConversationSummary[] = res.data ?? [];
-        setConversations(data);
-        if (data.length > 0 && selectedUserId === null) {
-          setSelectedUserId(data[0].other_user_id);
+        const rawData: any[] = res.data ?? [];
+        const normalized: ConversationSummary[] = rawData.map((item: any) => ({
+          other_user_id: item.other_user_id ?? item.user_id,
+          other_user_name: item.other_user_name ?? item.user_name ?? "User",
+          last_message: item.last_message ?? "",
+          last_message_at: item.last_message_at ?? null,
+          unread_count: item.unread_count ?? 0,
+        }));
+        setConversations(normalized);
+        if (normalized.length > 0 && selectedUserId === null) {
+          setSelectedUserId(normalized[0].other_user_id);
         }
+        
+        // Also fetch user bookings for context cards
+        const bookingsRes = await apiClient.getBookingHistory();
+        setAllBookings(bookingsRes?.data ?? []);
       } catch {
         // silently fail
       } finally {
@@ -54,12 +66,22 @@ export default function MessagesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const userSessions = useMemo(() => {
+    if (!selectedUserId) return [];
+    return allBookings.filter(
+      (b: any) =>
+        (String(b.mentor_id) === String(selectedUserId) || String(b.learner_id) === String(selectedUserId)) &&
+        (b.status === "Accepted" || b.status === "Confirmed")
+    );
+  }, [allBookings, selectedUserId]);
+
   // Fetch thread when selected user changes
   const fetchThread = useCallback(async (userId: number) => {
     setLoadingThread(true);
     try {
       const res = await apiClient.getConversation(userId);
-      setThreadMessages(res.data ?? []);
+      const msgs = res.data?.messages ?? res.data ?? [];
+      setThreadMessages(Array.isArray(msgs) ? msgs : []);
       // Mark conversation as read
       await apiClient.markConversationRead(userId).catch(() => {});
       // Update unread count in sidebar
@@ -110,7 +132,7 @@ export default function MessagesPage() {
   );
 
   const currentUserId = currentUser
-    ? (currentUser as any).user_id ?? (currentUser as any).id
+    ? Number((currentUser as any).user_id ?? (currentUser as any).id)
     : null;
 
   return (
@@ -150,19 +172,19 @@ export default function MessagesPage() {
                       key={contact.other_user_id}
                       type="button"
                       onClick={() => setSelectedUserId(contact.other_user_id)}
-                      className={`flex w-full items-center gap-3 rounded-[1.25rem] border p-3 text-left transition ${
+                      className={`flex w-full items-center gap-3 rounded-[1.25rem] border p-3 text-left transition cursor-pointer ${
                         selectedUserId === contact.other_user_id
-                          ? "border-cyan-400/30 bg-cyan-400/10"
+                          ? "border-cyan-400/40 bg-cyan-500/15"
                           : "border-transparent bg-slate-950/30 hover:border-white/10 hover:bg-slate-950/40"
                       }`}
                     >
-                      <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-slate-800 text-sm font-semibold text-white">
-                        {contact.other_user_name.charAt(0)}
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-slate-800 text-sm font-semibold text-white">
+                        {(contact.other_user_name || "U").charAt(0).toUpperCase()}
                       </div>
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="truncate font-medium text-white">{contact.other_user_name}</span>
+                          <span className="truncate font-medium text-white">{contact.other_user_name || "User"}</span>
                           {contact.unread_count > 0 && (
                             <span className="rounded-full bg-cyan-400 px-2 py-0.5 text-[10px] font-semibold text-slate-900">
                               {contact.unread_count}
@@ -182,14 +204,51 @@ export default function MessagesPage() {
             <main className="flex min-h-[680px] flex-col rounded-[1.75rem] border border-white/10 bg-slate-900/70 shadow-[0_20px_60px_rgba(15,23,42,0.25)]">
               {selectedContact ? (
                 <>
-                  <div className="flex items-center gap-4 border-b border-white/10 p-5">
-                    <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-slate-800 text-sm font-semibold text-white">
-                      {selectedContact.other_user_name.charAt(0)}
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-semibold text-white">{selectedContact.other_user_name}</h3>
+                  <div className="flex items-center justify-between border-b border-white/10 p-5">
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-slate-800 text-sm font-semibold text-white">
+                        {(selectedContact.other_user_name || "U").charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-white">{selectedContact.other_user_name || "User"}</h3>
+                        <p className="text-xs text-slate-400">Direct Conversation</p>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Active Session Context Card between these two users */}
+                  {userSessions.length > 0 && (
+                    <div className="mx-5 mt-4 rounded-2xl border border-cyan-400/20 bg-gradient-to-r from-cyan-500/10 via-slate-900/90 to-teal-500/10 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full bg-cyan-400/20 border border-cyan-400/30 px-2.5 py-0.5 text-[11px] font-bold text-cyan-300">
+                            {userSessions[0].skill_name || "Session"}
+                          </span>
+                          <span className="text-xs font-bold text-white">
+                            {userSessions[0].session_date} ({userSessions[0].session_mode})
+                          </span>
+                        </div>
+                        {userSessions[0].location && (
+                          <div className="text-[11px] text-slate-300 mt-1">
+                            📍 {userSessions[0].location}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {userSessions[0].session_mode === "online" && userSessions[0].meeting_link && (
+                          <a
+                            href={userSessions[0].meeting_link}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-cyan-400 transition shadow-sm"
+                          >
+                            <Video className="h-3.5 w-3.5" /> Join Call
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex-1 space-y-4 overflow-y-auto p-5">
                     {loadingThread ? (
@@ -198,28 +257,44 @@ export default function MessagesPage() {
                       </div>
                     ) : threadMessages.length ? (
                       threadMessages.map((msg) => {
-                        const isFromCurrentUser = currentUserId !== null && msg.sender_id === currentUserId;
+                        const isFromCurrentUser =
+                          currentUserId !== null &&
+                          Number(msg.sender_id) === Number(currentUserId);
                         return (
                           <div
                             key={msg.message_id}
-                            className={`flex ${isFromCurrentUser ? "justify-end" : "justify-start"}`}
+                            className={`flex items-end gap-2.5 ${
+                              isFromCurrentUser ? "justify-end" : "justify-start"
+                            }`}
                           >
+                            {!isFromCurrentUser && (
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-slate-800 text-xs font-semibold text-white">
+                                {(selectedContact.other_user_name || "U").charAt(0).toUpperCase()}
+                              </div>
+                            )}
+
                             <div
-                              className={`max-w-[75%] rounded-[1.25rem] px-4 py-3 ${
+                              className={`max-w-[70%] rounded-[1.5rem] px-4 py-3 shadow-md ${
                                 isFromCurrentUser
-                                  ? "bg-cyan-500 text-slate-950"
-                                  : "bg-slate-800/90 text-white"
+                                  ? "rounded-br-sm bg-gradient-to-r from-cyan-500 via-teal-500 to-indigo-500 text-white"
+                                  : "rounded-bl-sm border border-white/10 bg-slate-800/90 text-white"
                               }`}
                             >
-                              <div className="text-sm leading-relaxed">{msg.message}</div>
+                              <div className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</div>
                               <div
-                                className={`mt-2 text-[10px] ${
-                                  isFromCurrentUser ? "text-slate-800/70" : "text-slate-400"
+                                className={`mt-1.5 text-[10px] ${
+                                  isFromCurrentUser ? "text-cyan-100 text-right" : "text-slate-400"
                                 }`}
                               >
-                                {msg.sent_at ? new Date(msg.sent_at).toLocaleString() : ""}
+                                {msg.sent_at ? new Date(msg.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
                               </div>
                             </div>
+
+                            {isFromCurrentUser && (
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-500/20 text-xs font-semibold text-cyan-200">
+                                {(currentUser?.name || "Me").charAt(0).toUpperCase()}
+                              </div>
+                            )}
                           </div>
                         );
                       })

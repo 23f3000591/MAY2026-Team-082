@@ -7,6 +7,7 @@ from app.services.session_service import (
     accept_booking_service,
     reject_booking_service,
     cancel_booking_service,
+    complete_session_service,
     reschedule_session_service,
     get_booking_history_service,
 )
@@ -23,9 +24,20 @@ def _serialize_session(session):
     return {
         "session_id": session.session_id,
         "learner_id": session.learner_id,
+        "learner_name": session.learner.full_name if session.learner else None,
+        "learner_email": session.learner.email if session.learner else None,
         "mentor_id": session.mentor_id,
+        "mentor_name": session.mentor.full_name if session.mentor else None,
+        "mentor_email": session.mentor.email if session.mentor else None,
         "skill_id": session.skill_id,
+        "skill_name": session.skill.skill_name if session.skill else None,
+        "skill_category": session.skill.category if session.skill else None,
         "availability_id": session.availability_id,
+        "time_slot": (
+            f"{session.availability.day_of_week}, {session.availability.start_time.strftime('%H:%M')} - {session.availability.end_time.strftime('%H:%M')}"
+            if session.availability
+            else None
+        ),
         "session_mode": session.session_mode,
         "session_date": session.session_date.isoformat(),
         "meeting_link": session.meeting_link,
@@ -173,6 +185,37 @@ def cancel_booking(session_id):
 
     except Exception as err:
         current_app.logger.exception(f"Unexpected error in cancel_booking: {str(err)}")
+        return (
+            jsonify({"status": "error", "message": "An unexpected error occurred."}),
+            500,
+        )
+
+
+# Endpoint for completing a session
+@session_bp.route("/<int:session_id>/complete", methods=["PUT"])
+@jwt_required()
+def complete_session(session_id):
+    """
+    PUT /api/sessions/<session_id>/complete
+
+    Mentor marks a session as completed.
+    """
+    try:
+        session = complete_session_service(session_id)
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "Session marked as completed successfully",
+                    "data": _serialize_session(session),
+                }
+            ),
+            200,
+        )
+    except ValidationError as err:
+        return jsonify({"status": "error", "message": err.message}), 400
+    except Exception as err:
+        current_app.logger.exception(f"Unexpected error in complete_session: {str(err)}")
         return (
             jsonify({"status": "error", "message": "An unexpected error occurred."}),
             500,

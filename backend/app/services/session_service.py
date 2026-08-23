@@ -173,6 +173,8 @@ def book_session_service(data):
 def accept_booking_service(session_id):
     """
     Mentor accepts a pending booking request.
+    Automatically generates meeting link (for online sessions) and posts
+    a confirmation message into the 1-on-1 chat thread.
     """
 
     user_id = int(get_jwt_identity())
@@ -189,10 +191,33 @@ def accept_booking_service(session_id):
 
     session.status = "Accepted"
 
+    # Automatically set a meeting link if online mode and not already set
+    if session.session_mode == "online" and not session.meeting_link:
+        session.meeting_link = f"https://meet.jit.si/NSEP-Session-{session.session_id}"
+
+    # Auto-generate confirmation message in chat thread
+    from app.models.message import Message
+    mentor_user = db.session.get(User, session.mentor_id)
+    mentor_name = mentor_user.full_name if mentor_user else "Mentor"
+    
+    chat_text = f"🎉 Session Confirmed! I have accepted your session request for {session.session_date.isoformat()} ({session.session_mode.capitalize()} mode)."
+    if session.session_mode == "online" and session.meeting_link:
+        chat_text += f"\nVideo Room: {session.meeting_link}"
+    elif session.location:
+        chat_text += f"\nLocation: {session.location}"
+
+    confirmation_msg = Message(
+        sender_id=session.mentor_id,
+        receiver_id=session.learner_id,
+        message=chat_text,
+        is_read=False,
+    )
+    db.session.add(confirmation_msg)
+
     _notify(
         session.learner_id,
         "Booking accepted",
-        f"Your session on {session.session_date.isoformat()} was accepted.",
+        f"Your session with {mentor_name} on {session.session_date.isoformat()} was accepted.",
         "booking_accepted",
     )
 
@@ -265,6 +290,35 @@ def cancel_booking_service(session_id):
 
     db.session.commit()
 
+    return session
+
+
+# Service function for completing a session
+def complete_session_service(session_id):
+    """
+    Mentor marks an accepted session as completed.
+    """
+    user_id = int(get_jwt_identity())
+    session = _get_session_or_raise(session_id)
+
+    if session.mentor_id != user_id and session.learner_id != user_id:
+        raise ValidationError("Only session participants can mark it as completed.")
+
+    if session.status not in ("Accepted", "Confirmed"):
+        raise ValidationError(
+            f"Cannot complete a session with status '{session.status}'. Must be Accepted/Confirmed."
+        )
+
+    session.status = "Completed"
+
+    _notify(
+        session.learner_id,
+        "Session Completed",
+        f"Your session on {session.session_date.isoformat()} was marked completed. Please leave a review!",
+        "session_completed",
+    )
+
+    db.session.commit()
     return session
 
 

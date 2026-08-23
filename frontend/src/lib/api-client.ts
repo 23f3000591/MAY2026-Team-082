@@ -139,6 +139,11 @@ class ApiClient {
     return response.data;
   }
 
+  async deleteSkill(skillId: number | string) {
+    const response = await this.client.delete(`/profile/skills/${skillId}`);
+    return response.data;
+  }
+
   // Fixed: backend uses PUT /profile/picture with JSON body (not multipart POST)
   async uploadProfilePicture(profilePictureUrl: string) {
     const response = await this.client.put('/profile/picture', {
@@ -243,6 +248,11 @@ class ApiClient {
     return response.data;
   }
 
+  async completeBooking(sessionId: number) {
+    const response = await this.client.put(`/sessions/${sessionId}/complete`);
+    return response.data;
+  }
+
   async rescheduleSession(sessionId: number, data: any) {
     const response = await this.client.put(`/sessions/${sessionId}/reschedule`, data);
     return response.data;
@@ -255,7 +265,9 @@ class ApiClient {
 
   // ============= AVAILABILITY ENDPOINTS =============
   async addAvailability(data: {
-    day_of_week: string;
+    slot_type?: string;
+    day_of_week?: string;
+    specific_date?: string;
     start_time: string;
     end_time: string;
   }) {
@@ -268,13 +280,13 @@ class ApiClient {
     return response.data;
   }
 
-  async deleteAvailability(availabilityId: string) {
+  async deleteAvailability(availabilityId: string | number) {
     const response = await this.client.delete(`/availability/${availabilityId}`);
     return response.data;
   }
 
   // Fixed: backend route is /availability/mentor/<id>, not /mentors/<id>/availability
-  async getMentorAvailability(mentorId: string) {
+  async getMentorAvailability(mentorId: string | number) {
     const response = await this.client.get(`/availability/mentor/${mentorId}`);
     return response.data;
   }

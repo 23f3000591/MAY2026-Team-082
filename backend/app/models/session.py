@@ -15,7 +15,7 @@ class Session(db.Model):
     skill_id = db.Column(db.Integer, db.ForeignKey("skills.skill_id"), nullable=False)
 
     availability_id = db.Column(
-        db.Integer, db.ForeignKey("availabilities.availability_id"), nullable=False
+        db.Integer, db.ForeignKey("availabilities.availability_id"), nullable=True
     )
 
     session_mode = db.Column(db.String(20), nullable=False)
