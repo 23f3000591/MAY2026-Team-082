@@ -68,39 +68,35 @@ function DiscoverContent() {
   const fetchMentors = async () => {
     setLoading(true);
     try {
-      const activeSkillFilter = selectedCategory !== "all" 
-        ? selectedCategory 
-        : (query.trim() || undefined);
-
       const res = await mentorService.filter({
-        skill: activeSkillFilter,
+        // Only pass category as a skill filter to the backend; name search is done client-side
+        skill: selectedCategory !== "all" ? selectedCategory : undefined,
         location: location.trim() || undefined,
         minimum_rating: rating || undefined,
         sort: sortBy,
       });
 
       const data = Array.isArray(res) ? res : (res as any)?.data ?? [];
-      
-      // If query is filled and category is not "all", refine by query on frontend
-      let filtered = data;
-      if (query.trim() && selectedCategory !== "all") {
-        const qLower = query.toLowerCase();
-        filtered = data.filter((m: any) => {
-          const nameMatch = (m.full_name || m.name || "").toLowerCase().includes(qLower);
-          const skillMatch = (m.skills || []).some((s: any) => 
-            (s.skill_name || s.name || s).toLowerCase().includes(qLower)
-          );
-          return nameMatch || skillMatch;
-        });
-      }
-
-      setMentorsList(filtered);
+      setMentorsList(data);
     } catch {
       setMentorsList([]);
     } finally {
       setLoading(false);
     }
   };
+
+  // Client-side filter by the text query (name or skill match)
+  const displayedMentors = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return mentorsList;
+    return mentorsList.filter((m: any) => {
+      const nameMatch = (m.full_name || m.name || "").toLowerCase().includes(q);
+      const skillMatch = (m.skills || []).some((s: any) =>
+        (s.skill_name || s.name || "").toLowerCase().includes(q)
+      );
+      return nameMatch || skillMatch;
+    });
+  }, [mentorsList, query]);
 
   useEffect(() => {
     fetchMentors();
@@ -303,7 +299,7 @@ function DiscoverContent() {
               <Loader2 className="h-8 w-8 animate-spin text-cyan-400 mb-3" />
               <span className="text-sm">Discovering local mentors...</span>
             </div>
-          ) : mentorsList.length === 0 ? (
+          ) : displayedMentors.length === 0 ? (
             <div className="rounded-[2.5rem] border border-dashed border-white/10 bg-slate-900/40 p-16 text-center">
               <Users className="mx-auto h-12 w-12 text-slate-500 mb-3" />
               <h3 className="text-lg font-bold text-white">No mentors found</h3>
@@ -324,7 +320,7 @@ function DiscoverContent() {
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-              {mentorsList.map((mentor) => {
+              {displayedMentors.map((mentor) => {
                 const mId = String(mentor.user_id || mentor.id);
                 const mName = mentor.full_name || mentor.name;
                 const mReviews = Number(mentor.review_count ?? mentor.reviews_count ?? mentor.reviews ?? 0);
