@@ -235,42 +235,32 @@ export default function ProfilePage() {
                   <Mail className="h-3.5 w-3.5" /> {currentUser?.email || "user@gmail.com"} · <MapPin className="h-3.5 w-3.5 text-cyan-400" /> {location}
                 </p>
                 
-                {/* Community Trust Badges */}
-                <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-300">
-                    <ShieldCheck className="h-3 w-3" /> Community Verified
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-cyan-300">
-                    <Check className="h-3 w-3" /> Email & Phone Confirmed
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 border border-purple-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-purple-300">
-                    <Sparkles className="h-3 w-3" /> Trust Score: 98/100
-                  </span>
-                </div>
               </div>
             </div>
 
             {/* Clean Metric Cards */}
             <div className="flex items-center gap-3">
-              <div className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-center">
-                <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Community Rating</div>
-                {reviewCount > 0 ? (
-                  <>
-                    <div className="mt-1 flex items-center justify-center gap-1.5 text-xl font-bold text-amber-300">
-                      <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                      <span>{displayRating.toFixed(1)}</span>
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">({reviewCount} reviews)</div>
-                  </>
-                ) : (
-                  <>
-                    <div className="mt-1 text-sm font-bold text-cyan-300">
-                      New Member
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">0 reviews yet</div>
-                  </>
-                )}
-              </div>
+              {role === "mentor" && (
+                <div className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-center">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Community Rating</div>
+                  {reviewCount > 0 ? (
+                    <>
+                      <div className="mt-1 flex items-center justify-center gap-1.5 text-xl font-bold text-amber-300">
+                        <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                        <span>{displayRating.toFixed(1)}</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">({reviewCount} reviews)</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="mt-1 text-sm font-bold text-cyan-300">
+                        New Member
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">0 reviews yet</div>
+                    </>
+                  )}
+                </div>
+              )}
 
               {role === "mentor" && (
                 <div className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-center">
@@ -285,7 +275,7 @@ export default function ProfilePage() {
               {/* Message Admin Support Option */}
               <Link
                 href="/messages?to=1&name=Society%20Admin"
-                className="hidden sm:flex flex-col items-center justify-center rounded-2xl border border-purple-500/30 bg-purple-500/10 px-4 py-3 text-center transition hover:bg-purple-500/20"
+                className="flex flex-col items-center justify-center rounded-2xl border border-purple-500/30 bg-purple-500/10 px-4 py-3 text-center transition hover:bg-purple-500/20"
                 title="Send a message to Society Administrator for help, verification, or reporting"
               >
                 <ShieldCheck className="h-5 w-5 text-purple-300 mb-1" />
