@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowRight, Sparkles, Loader2, Eye, EyeOff, ShieldCheck, UserCheck, GraduationCap, AlertCircle } from "lucide-react";
+import { ArrowRight, Sparkles, Loader2, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { apiClient } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
@@ -16,12 +16,6 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const setCurrentUser = useAppStore((state) => state.setCurrentUser);
-
-  const handleQuickFill = (demoEmail: string, demoPass: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    setError("");
-  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -103,56 +97,14 @@ export default function LoginPage() {
         <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">Sign in to your account</h1>
         <p className="mt-2.5 text-sm text-slate-300">Access your dashboard, manage community learning, and connect with peers.</p>
 
-        {/* Quick Demo Fill Buttons */}
-        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-3.5">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Quick Test Credentials</div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickFill("akhil@gmail.com", "Password123!")}
-              className="flex items-center gap-1.5 rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-medium text-purple-200 hover:bg-purple-500/20 transition cursor-pointer"
-            >
-              <ShieldCheck className="h-3.5 w-3.5 text-purple-300" /> Akhil (Admin)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickFill("saanvi@gmail.com", "Password123!")}
-              className="flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-200 hover:bg-cyan-500/20 transition cursor-pointer"
-            >
-              <UserCheck className="h-3.5 w-3.5 text-cyan-300" /> Saanvi (Python Mentor)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickFill("karthick@gmail.com", "Password123!")}
-              className="flex items-center gap-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-200 hover:bg-blue-500/20 transition cursor-pointer"
-            >
-              <UserCheck className="h-3.5 w-3.5 text-blue-300" /> Karthick (Data Science)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickFill("harshkumar@gmail.com", "Password123!")}
-              className="flex items-center gap-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-xs font-medium text-teal-200 hover:bg-teal-500/20 transition cursor-pointer"
-            >
-              <UserCheck className="h-3.5 w-3.5 text-teal-300" /> Harsh (Guitar & Yoga)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickFill("harshad@gmail.com", "Password123!")}
-              className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-200 hover:bg-emerald-500/20 transition cursor-pointer"
-            >
-              <GraduationCap className="h-3.5 w-3.5 text-emerald-300" /> Harshad (Learner)
-            </button>
-          </div>
-        </div>
-
-        <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+        <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
           <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/70 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus-within:border-cyan-500/50 transition">
             <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Email Address</label>
             <input 
               className="w-full rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 disabled:opacity-50" 
               value={email} 
               onChange={(event) => setEmail(event.target.value)} 
-              placeholder="akhil@gmail.com"
+              placeholder="you@example.com"
               type="email"
               autoComplete="email"
               disabled={isLoading}
